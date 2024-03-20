@@ -1,3 +1,11 @@
 {
-    "cmake.configureOnOpen": false
+    "cmake.configureOnOpen": false,
+    "files.associations": {
+        "*.rmd": "markdown",
+        "condition_variable": "cpp",
+        "atomic": "cpp",
+        "iostream": "cpp",
+        "mutex": "cpp",
+        "vector": "cpp"
+    }
 }

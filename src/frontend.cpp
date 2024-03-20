@@ -280,7 +280,9 @@ int Frontend::EstimateCurrentPose() {
     optimizer.setAlgorithm(solver);
     
     // 设置顶点
-
+    VertexPose *vertex_pose = new VertexPose();
+    vertex_pose->setId(0);
+    
 }
 
 int Frontend::TrackLastFrame() {
