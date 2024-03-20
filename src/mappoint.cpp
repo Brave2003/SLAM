@@ -36,8 +36,9 @@ void MapPoint::RemoveObservation(std::shared_ptr<Feature> feat) {
     for (auto iter = observations_.begin(); iter != observations_.end();
          iter++) {
         if (iter->lock() == feat) {
+            // 解除 两点之间的映射关系
             observations_.erase(iter);
-            feat->map_point_.reset();
+            feat->map_point_.reset(); 
             observed_times_--;
             break;
         }

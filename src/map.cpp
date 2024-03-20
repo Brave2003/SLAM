@@ -23,11 +23,14 @@
 namespace myslam {
 
 void Map::InsertKeyFrame(Frame::Ptr frame) {
+    // 贪心策略
+
     current_frame_ = frame;
     if (keyframes_.find(frame->keyframe_id_) == keyframes_.end()) {
         keyframes_.insert(make_pair(frame->keyframe_id_, frame));
         active_keyframes_.insert(make_pair(frame->keyframe_id_, frame));
-    } else {
+    } else {//TODO 判断下面语句是否有用
+        // std::cout<<frame->keyframe_id_;
         keyframes_[frame->keyframe_id_] = frame;
         active_keyframes_[frame->keyframe_id_] = frame;
     }
@@ -41,7 +44,7 @@ void Map::InsertMapPoint(MapPoint::Ptr map_point) {
     if (landmarks_.find(map_point->id_) == landmarks_.end()) {
         landmarks_.insert(make_pair(map_point->id_, map_point));
         active_landmarks_.insert(make_pair(map_point->id_, map_point));
-    } else {
+    } else {//TODO 判断 同上
         landmarks_[map_point->id_] = map_point;
         active_landmarks_[map_point->id_] = map_point;
     }
@@ -86,6 +89,7 @@ void Map::RemoveOldKeyframe() {
         }
     }
     for (auto feat : frame_to_remove->features_right_) {
+        // FindFeaturesInRight函数中对于没有对应上的右图特征点，选择置空
         if (feat == nullptr) continue;
         auto mp = feat->map_point_.lock();
         if (mp) {
@@ -100,6 +104,8 @@ void Map::CleanMap() {
     int cnt_landmark_removed = 0;
     for (auto iter = active_landmarks_.begin();
          iter != active_landmarks_.end();) {
+        // 没有观测到该地图点的视角
+        // 只是删除活动视角下
         if (iter->second->observed_times_ == 0) {
             iter = active_landmarks_.erase(iter);
             cnt_landmark_removed++;
