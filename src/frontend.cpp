@@ -280,7 +280,7 @@ int Frontend::EstimateCurrentPose() {
     optimizer.setAlgorithm(solver);
     
     // 设置顶点
-    
+
 }
 
 int Frontend::TrackLastFrame() {
