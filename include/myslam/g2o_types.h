@@ -162,7 +162,9 @@ namespace myslam {
                     -fx - fx * X * X * Zinv2, fx * Y * Zinv, 0, -fy * Zinv,
                     fy * Y * Zinv2, fy + fy * Y * Y * Zinv2, -fy * X * Y * Zinv2,
                     -fy * X * Zinv;
-                // TODO: 不理解
+                // TODO 矩阵计算
+                // Xi 是因为有有个自由度可以优化， Yi 只有三个 所以是 2×6 和 2×3
+                // 因为要考虑左右图外参
                 _jacobianOplusXj = _jacobianOplusXi.block<2, 3>(0, 0) *
                                 _cam_ext.rotationMatrix() * T.rotationMatrix();
 
