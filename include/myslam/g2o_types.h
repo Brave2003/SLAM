@@ -87,7 +87,7 @@ namespace myslam {
                 // 使用第一个顶点，因为边为一元边
                 const VertexPose *v = static_cast<VertexPose *>(_vertices[0]);
                 SE3 T = v->estimate();
-                // 因为该类只考虑左图来计算位姿 所以不需要进行外参的变化
+                // 因为该类只考虑左图来计算位姿 所以不需要进行外参的变化,左图相机是基准相机
                 Vec3 pos_pixel = K * ( T * _pos3d );
                 pos_pixel /= pos_pixel[2]; // (x/z, y/z, 1)
                 _error = _measurement - pos_pixel.head<2>();

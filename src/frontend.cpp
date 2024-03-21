@@ -282,7 +282,71 @@ int Frontend::EstimateCurrentPose() {
     // 设置顶点
     VertexPose *vertex_pose = new VertexPose();
     vertex_pose->setId(0);
+    vertex_poes->setEstimate(current_frame_->Pose());
+    optimizer.addVertex(vertex_pose);
+
+    Mat33 K = camera_left_->K();
+
+    int index = 1;
+    std::vector<EdgeProjectionPoseOnly *> edges;
+    std::vector<Feature::Ptr> features;
+    for( size_t i = 0; i <current_frame_->features_left_.size(); ++i){
+        auto mp = current_frame_->features_left_[i]->map_point_.lock();
+        // TODO 判斷是否有用
+        if(mp){
+            features.push_back(current_frame_->features_left_[i]);
+            EdgeProjectionPoseOnly * edge = new EdgeProjectionPoseOnly(mp->pos_, K);
+            edge->setId(index);
+            edge->setVertex(0, vertex_poses);
+            edge->setMeasurement(toVec2(current_frame_->features_left_[i]->position_.pt));
+            edge->setInformation(Eigen::Matrix2d::Indentity());
+            edge->setRobustKernel(new g2o::RobustKernelHuber);
+            edges.push_back(edge);
+            optimizer.addEdge(edge);
+            index++;
+        }
+    }
     
+    //TODO 设置为yaml文件参数
+    const double chi2_th = 5.991;
+    int cnt_outlier = 0;
+    for(int itertation = 0; itertation < 4 ; ++itertation){
+        vertex_pose->setEstimate(current_frame_->Pose());
+        optimizer.initializeOptimization();
+        optimizer.optimize(10);
+        cnt_outliner = 0;
+
+        for (size_t i=0 ; i<edges.size() ; ++i){
+            auto e = edges[i];
+            if(features[i]->is_outlier_){
+                e->computeError();
+            }
+            if(e->chi2() > chi2_th) {
+                features[i]->is_outlier_ = true;
+                e->setLevel(1);
+                cnt_outlier++;
+            }else{
+                features[i]->is_outluiers_ = false;
+                e->setLevel(0);
+            }
+            if(itertation==2){
+                e->setRobustKernel(nullptr); //
+            }
+        }
+    }
+
+    LOG(INFO) << "Outlier/Inlier in pose estimating: " << cnt_outlier << "/" << features.size() - cnt_outlier;
+    current_frame_ -> setPose(vertex_pose->estimate());
+
+    LOG(INFO) << "Current Pose = \n" <<current_frame_->Pose().matrix();
+
+    for (auto &feat : features){
+        if(feat -> is_outlier_){
+            feat->map_point_.reset();
+            // TODO 添加测试,据说以后会用到
+            feat->is_outlier_ = false;
+        }
+    }return features.size() - cnt_outlier;
 }
 
 int Frontend::TrackLastFrame() {
