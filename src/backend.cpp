@@ -88,9 +88,73 @@ namespace{
                 }else{
                     edge = new EdgeProjection(K, right_ext);
                 }
-                
 
+                // 如果landmark还没有被加入优化，则新加一个顶点
+                if (vertices_landmarks.find(landmark_id) ==vertices_landmarks.end()) {
+                    VertexXYZ *v = new VertexXYZ;
+                    v->setEstimate(landmark.second->Pos());
+                    v->setId(landmark_id + max_kf_id + 1);
+                    v->setMarginalized(true);
+                    vertices_landmarks.insert({landmark_id, v});
+                    optimizer.addVertex(v);
+                }
+
+                edge -> setId(index++);
+                edge -> setVertex(0, vertices.at(frame->keyframe_id_));
+                edge -> setVertex(1, vertices_landmarks.at(landmark_id));
+                edge -> setMeasurement(toVec2(feat->position_.pt));
+                // 表示这条边的不确定性或权重
+                // 息矩阵越大（对角线上的值越大），表示对应的观测或约束越精确或权重越大
+                edge -> setInformation(Mat22::Identity());
+                auto rk = new g2o::RobustKernelHuber();
+                rk -> setDelta(chi2_th);
+                edge -> setRobustKernel(rk);
+                edges_and_features.insert({edge, feat});
+
+                optimizer.addEdge(edge);
             }
+        }
+
+        optimizer.initializeOptimization();
+        optimizer.optimize(10);
+
+        // 找到一个合适的chi2_th阈值，使得内点的比例超过50%
+        // 增强优化迭代的鲁棒性
+        int iteration = 0;
+        while(iteration < 5){
+            int cnt_outlier = 0, cnt_inlier =0;
+            for(auto &ef : edges_and_features){
+                if(ef.first -> chi2() > chi2_th){
+                    cnt_outlier++;
+                }else{
+                    cnt_inlier++;
+                }
+            }
+            double inlier_ratio = cnt_inlier / double(cnt_inlier + cnt_outlier);
+            if (inlier_ratio > 0.5){
+                break;
+            }else{
+                chi2_th *= 2;
+                iteration++;
+            }
+        }
+
+        for(auto &ef : edges_and_features){
+            if(ef.first->chi2() > chi2_th){
+                ef.second -> is_outlier_ = true;
+                ef.second -> map_point.lock() -> RemoveObservation(ef.second);
+            }else{
+                ef.second -> is_outlier_ = false;
+            }
+        }
+
+        LOG(INFO) << "Outlier/Inlier in optimization: " << cnt_outlier << "/" <<cnt_outlier;
+
+        for(auto &c: vertices){
+            keyframes.at(v.first)->SetPose(v.second->estimate());
+        }
+        for (auto &v : vertices_landmarks) {
+            landmarks.at(v.first)->SetPos(v.second->estimate());
         }
     }
 }
