@@ -282,7 +282,7 @@ int Frontend::EstimateCurrentPose() {
     // 设置顶点
     VertexPose *vertex_pose = new VertexPose();
     vertex_pose->setId(0);
-    vertex_poes->setEstimate(current_frame_->Pose());
+    vertex_pose->setEstimate(current_frame_->Pose());
     optimizer.addVertex(vertex_pose);
 
     Mat33 K = camera_left_->K();
@@ -297,9 +297,9 @@ int Frontend::EstimateCurrentPose() {
             features.push_back(current_frame_->features_left_[i]);
             EdgeProjectionPoseOnly * edge = new EdgeProjectionPoseOnly(mp->pos_, K);
             edge->setId(index);
-            edge->setVertex(0, vertex_poses);
+            edge->setVertex(0, vertex_pose);
             edge->setMeasurement(toVec2(current_frame_->features_left_[i]->position_.pt));
-            edge->setInformation(Eigen::Matrix2d::Indentity());
+            edge->setInformation(Eigen::Matrix2d::Identity());
             edge->setRobustKernel(new g2o::RobustKernelHuber);
             edges.push_back(edge);
             optimizer.addEdge(edge);
@@ -314,7 +314,7 @@ int Frontend::EstimateCurrentPose() {
         vertex_pose->setEstimate(current_frame_->Pose());
         optimizer.initializeOptimization();
         optimizer.optimize(10);
-        cnt_outliner = 0;
+        cnt_outlier = 0;
 
         for (size_t i=0 ; i<edges.size() ; ++i){
             auto e = edges[i];
@@ -326,7 +326,7 @@ int Frontend::EstimateCurrentPose() {
                 e->setLevel(1);
                 cnt_outlier++;
             }else{
-                features[i]->is_outluiers_ = false;
+                features[i]->is_outlier_ = false;
                 e->setLevel(0);
             }
             if(itertation==2){
@@ -336,7 +336,7 @@ int Frontend::EstimateCurrentPose() {
     }
 
     LOG(INFO) << "Outlier/Inlier in pose estimating: " << cnt_outlier << "/" << features.size() - cnt_outlier;
-    current_frame_ -> setPose(vertex_pose->estimate());
+    current_frame_ -> SetPose(vertex_pose->estimate());
 
     LOG(INFO) << "Current Pose = \n" <<current_frame_->Pose().matrix();
 

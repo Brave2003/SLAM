@@ -1,5 +1,5 @@
-#ifndef MYSALM_BACKEND_H
-#define MYSALM_BACKEND_H
+#ifndef MYSLAM_BACKEND_H
+#define MYSLAM_BACKEND_H
 
 #include "myslam/common_include.h"
 
@@ -22,7 +22,7 @@ namespace myslam{
                 map_ = map;
             }
 
-            void UpdateMap(Map::Ptr map);
+            void UpdateMap();
 
             void Stop();
 
@@ -42,7 +42,9 @@ namespace myslam{
 
             // 用于表示后端是否正在运行
             std::atomic<bool> backend_running_;
-    }
+
+            Camera::Ptr cam_left_ = nullptr, cam_right_ = nullptr;
+    };
 }
 
 #endif

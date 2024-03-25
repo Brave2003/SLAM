@@ -29,7 +29,7 @@ namespace myslam {
 
             virtual void setToOriginImpl() override{
                 _estimate = SE3();
-            }
+            };
 
             /**
              * @brief 输入六向量数组，通过指数映射，更新位姿
@@ -37,7 +37,8 @@ namespace myslam {
              * @param update 
              */
             virtual void oplusImpl(const double *update) override{
-                Vec6 update_eigen << update[0], update[1], update[2], update[3], update[4], update[5];
+                Vec6 update_eigen;
+                update_eigen << update[0], update[1], update[2], update[3], update[4], update[5];
                 _estimate = SE3::exp(update_eigen)* _estimate;
             }
 
@@ -177,6 +178,6 @@ namespace myslam {
         private:
             Mat33 _K;
             SE3 _cam_ext;
-    }
+    };
 }
 #endif
