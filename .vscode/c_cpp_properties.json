@@ -5,10 +5,14 @@
             "includePath": [
                 "${workspaceFolder}/include/**",
                 "${workspaceFolder}/include/myslam/**",
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "/usr/include/opencv4/**",
+                "/usr/include/**",
+                "/usr/local/Pangolin-0.5/include/**",
+                "${workspaceFolder}/include"
             ],
             "defines": [],
-            "compilerPath": "C:/code/mingw-w64-gcc/bin/gcc.exe",
+            "compilerPath": "/usr/bin/gcc",
             "cStandard": "c17",
             "cppStandard": "gnu++14",
             "intelliSenseMode": "linux-gcc-x64"
