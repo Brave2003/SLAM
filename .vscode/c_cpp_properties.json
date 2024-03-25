@@ -3,14 +3,12 @@
         {
             "name": "Linux",
             "includePath": [
-                "/usr/include/eigen3/**",
-                "/usr/include/opencv4",
                 "${workspaceFolder}/include/**",
                 "${workspaceFolder}/include/myslam/**",
                 "${workspaceFolder}/**"
             ],
             "defines": [],
-            "compilerPath": "/usr/bin/gcc",
+            "compilerPath": "C:/code/mingw-w64-gcc/bin/gcc.exe",
             "cStandard": "c17",
             "cppStandard": "gnu++14",
             "intelliSenseMode": "linux-gcc-x64"
