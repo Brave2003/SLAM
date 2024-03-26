@@ -6,7 +6,7 @@
                 "${workspaceFolder}/include/**",
                 "${workspaceFolder}/include/myslam/**",
                 "${workspaceFolder}/**",
-                "/usr/include/opencv4/**",
+                "/usr/local/opencv-3.4.16/include/**",
                 "/usr/include/**",
                 "/usr/local/Pangolin-0.5/include/**",
                 "${workspaceFolder}/include",

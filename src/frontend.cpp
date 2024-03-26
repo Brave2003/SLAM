@@ -13,6 +13,7 @@
 #include "myslam/map.h"
 #include "myslam/viewer.h"
 
+
 namespace myslam {
 
 Frontend::Frontend() {
@@ -22,7 +23,7 @@ Frontend::Frontend() {
     num_features_ = Config::Get<int>("num_features");
 }
 
-bool Frontend::AddFrame(myslam::Frame::Ptr frame) {
+bool Frontend::AddFrame(Frame::Ptr frame) {
     current_frame_ = frame;
 
     switch (status_) {
@@ -50,7 +51,7 @@ bool Frontend::AddFrame(myslam::Frame::Ptr frame) {
  * @return true 
  * @return false 
  */
-bool Frontend::StereoInit() {    
+bool Frontend::StereoInit() {
 
     int num_features_left = DetectFeatures();
     int num_coor_features = FindFeaturesInRight();
@@ -76,7 +77,6 @@ int Frontend::DetectFeatures() {
         cv::rectangle(mask, feat->position_.pt - cv::Point2f(10, 10),
                       feat->position_.pt + cv::Point2f(10, 10), 0, CV_FILLED);
     }
-
     std::vector<cv::KeyPoint> keypoints;
     gftt_->detect(current_frame_->left_img_, keypoints, mask);
     int cnt_detected = 0;
@@ -85,7 +85,6 @@ int Frontend::DetectFeatures() {
             Feature::Ptr(new Feature(current_frame_, kp)));
         cnt_detected++;
     }
-
     LOG(INFO) << "Detect " << cnt_detected << " new features";
     return cnt_detected;
 }

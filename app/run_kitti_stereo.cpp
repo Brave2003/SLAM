@@ -1,7 +1,3 @@
-//
-// Created by gaoxiang on 19-5-4.
-//
-
 #include <gflags/gflags.h>
 #include "myslam/visual_odometry.h"
 
@@ -12,8 +8,9 @@ int main(int argc, char **argv) {
 
     myslam::VisualOdometry::Ptr vo(
         new myslam::VisualOdometry(FLAGS_config_file));
-    assert(vo->Init() == true);
+    vo->Init();
     vo->Run();
 
     return 0;
 }
+

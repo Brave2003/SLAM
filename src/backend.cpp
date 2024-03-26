@@ -5,19 +5,19 @@
 #include "myslam/map.h"
 #include "myslam/mappoint.h"
 
-namespace{
+namespace myslam{
     Backend::Backend(){
         backend_running_.store(true);
         backend_thread_ = std::thread(std::bind(&Backend::BackendLoop, this));
     }
 
     void Backend::UpdateMap(){
-        std::unique_lock<std:::mutex> lock(data_mutex_);
-        map_updated_.notify_one();
+        std::unique_lock<std::mutex> lock(data_mutex_);
+        map_update_.notify_one();
     }
 
     void Backend::Stop(){
-        backend_running_.stop(false);
+        backend_running_.store(false);
         map_update_.notify_one();
         backend_thread_.join();
     }
@@ -27,13 +27,13 @@ namespace{
             std::unique_lock<std::mutex>  lock(data_mutex_);
             map_update_.wait(lock);
 
-            Map::KeyframesType active_kfs = map_->GetActiveKeyframes();
+            Map::KeyframesType active_kfs = map_->GetActiveKeyFrames();
             Map::LandmarksType active_lms = map_->GetActiveMapPoints();
             Optimize(active_kfs, active_lms);
         }
     }
 
-    void Backend::Optimize(const Map::KeyframesType &keyframes, Map::LandmarksType &landmarks){
+    void Backend::Optimize(Map::KeyframesType &keyframes, Map::LandmarksType &landmarks){
         typedef g2o::BlockSolver_6_3 BlockSolverType;
         typedef g2o::LinearSolverCSparse<BlockSolverType::PoseMatrixType> LinearSolverType;
         auto solver = new g2o::OptimizationAlgorithmLevenberg(
@@ -72,7 +72,7 @@ namespace{
 
         std::map<EdgeProjection *, Feature::Ptr> edges_and_features;
 
-        for(auto &landmarkd : landmarks){
+        for(auto &landmark : landmarks){
             if (landmark.second -> is_outlier_) continue;
             unsigned long landmark_id = landmark.second -> id_;
             auto observations = landmark.second -> GetObs();
@@ -121,8 +121,9 @@ namespace{
         // 找到一个合适的chi2_th阈值，使得内点的比例超过50%
         // 增强优化迭代的鲁棒性
         int iteration = 0;
+        int cnt_outlier, cnt_inlier;
         while(iteration < 5){
-            int cnt_outlier = 0, cnt_inlier =0;
+            cnt_outlier = 0, cnt_inlier =0;
             for(auto &ef : edges_and_features){
                 if(ef.first -> chi2() > chi2_th){
                     cnt_outlier++;
@@ -142,16 +143,16 @@ namespace{
         for(auto &ef : edges_and_features){
             if(ef.first->chi2() > chi2_th){
                 ef.second -> is_outlier_ = true;
-                ef.second -> map_point.lock() -> RemoveObservation(ef.second);
+                ef.second -> map_point_.lock() -> RemoveObservation(ef.second);
             }else{
                 ef.second -> is_outlier_ = false;
             }
         }
 
-        LOG(INFO) << "Outlier/Inlier in optimization: " << cnt_outlier << "/" <<cnt_outlier;
+        LOG(INFO) << "Outlier/Inlier in optimization: " << cnt_outlier << "/" <<cnt_inlier;
 
         for(auto &c: vertices){
-            keyframes.at(v.first)->SetPose(v.second->estimate());
+            keyframes.at(c.first)->SetPose(c.second->estimate());
         }
         for (auto &v : vertices_landmarks) {
             landmarks.at(v.first)->SetPos(v.second->estimate());

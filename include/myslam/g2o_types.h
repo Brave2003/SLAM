@@ -50,7 +50,7 @@ namespace myslam {
                 return true;
             }
 
-    }
+    };
 
     class VertexXYZ : public g2o::BaseVertex<3, Vec3> {
         public:
@@ -72,7 +72,7 @@ namespace myslam {
             virtual bool write(std::ostream &out) const override {
                 return true;
             }
-    }
+    };
     /**
      * @brief BaseUnaryEdge<2, Vec2, VertexPose>,2表示边的维度数，Vec2表示测量值， Pose表示优化点
      *
@@ -88,9 +88,8 @@ namespace myslam {
                 // 使用第一个顶点，因为边为一元边
                 const VertexPose *v = static_cast<VertexPose *>(_vertices[0]);
                 SE3 T = v->estimate();
-                // TODO 加入外参试一试
                 // 因为该类只考虑左图来计算位姿 所以不需要进行外参的变化,左图相机是基准相机
-                Vec3 pos_pixel = K * ( T * _pos3d );
+                Vec3 pos_pixel = _K * ( T * _pos3d );
                 pos_pixel /= pos_pixel[2]; // (x/z, y/z, 1)
                 _error = _measurement - pos_pixel.head<2>();
             }
@@ -128,7 +127,7 @@ namespace myslam {
             // 相机坐标系下位置
             Vec3 _pos3d;
             Mat33 _K;
-    }
+    };
 
     class EdgeProjection : public g2o::BaseBinaryEdge<2, Vec2, VertexPose, VertexXYZ>{
         public:
@@ -137,10 +136,9 @@ namespace myslam {
             EdgeProjection(const Mat33 &K, const SE3 &cam_ext): _K(K), _cam_ext(cam_ext){};
 
             virtual void computeError() override{
-                const VertexPose *v0 = static_case<VertexPose *>(_vertices[0]);
-                const VertexXYZ *v1 = static_case<VertexXYZ *>(_vertices[1]);
+                const VertexPose *v0 = static_cast<VertexPose *>(_vertices[0]);
+                const VertexXYZ *v1 = static_cast<VertexXYZ *>(_vertices[1]);
                 SE3 T = v0 -> estimate();
-                // TODO: 这里为什么要考虑相机内参
                 // 因为该类需要考虑左右图
                 Vec3 pos_pixel = _K * (_cam_ext * (T * v1->estimate()));
                 pos_pixel /= pos_pixel[2]; // (x/z, y/z, 1)
@@ -164,7 +162,6 @@ namespace myslam {
                     -fx - fx * X * X * Zinv2, fx * Y * Zinv, 0, -fy * Zinv,
                     fy * Y * Zinv2, fy + fy * Y * Y * Zinv2, -fy * X * Y * Zinv2,
                     -fy * X * Zinv;
-                // TODO 矩阵计算
                 // Xi 是因为有有个自由度可以优化， Yi 只有三个 所以是 2×6 和 2×3
                 // 因为要考虑左右图外参
                 _jacobianOplusXj = _jacobianOplusXi.block<2, 3>(0, 0) *

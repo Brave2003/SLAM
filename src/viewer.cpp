@@ -24,7 +24,7 @@ namespace myslam{
         std::unique_lock<std::mutex> lck(viewer_data_mutex_);
         assert(map_ != nullptr);
         active_keyframes_ = map_->GetActiveKeyFrames();
-        active_landmarks_ = map_->GetActiveMapPoints();
+        active_landmarks_ = map_->GetAllMapPoints();
         map_updated_ = true;
     }
 
