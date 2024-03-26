@@ -4,6 +4,7 @@
 #include "myslam/g2o_types.h"
 #include "myslam/map.h"
 #include "myslam/mappoint.h"
+#include "myslam/config.h"
 
 namespace myslam{
     Backend::Backend(){
@@ -67,8 +68,7 @@ namespace myslam{
         SE3 right_ext = cam_right_ -> pose();
 
         int index = 1;
-        // TODO 设置参数
-        double chi2_th = 5.991;
+        double chi2_th = Config::Get<double>("chi2_th");
 
         std::map<EdgeProjection *, Feature::Ptr> edges_and_features;
 

@@ -19,6 +19,7 @@
 
 #include "myslam/map.h"
 #include "myslam/feature.h"
+#include "myslam/config.h"
 
 namespace myslam {
 
@@ -72,7 +73,7 @@ void Map::RemoveOldKeyframe() {
 
 
     //TODO 设置为参数
-    const double min_dis_th = 0.2;  // 最近阈值
+    const double min_dis_th = Config::Get<double>("min_dis_th");  // 最近阈值
     Frame::Ptr frame_to_remove = nullptr;
     if (min_dis < min_dis_th) {
         // 如果存在很近的帧，优先删掉最近的

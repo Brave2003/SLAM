@@ -291,7 +291,7 @@ int Frontend::EstimateCurrentPose() {
     std::vector<Feature::Ptr> features;
     for( size_t i = 0; i <current_frame_->features_left_.size(); ++i){
         auto mp = current_frame_->features_left_[i]->map_point_.lock();
-        // TODO 判斷是否有用
+        // 会存在 不存在对路标点的映射的情况
         if(mp){
             features.push_back(current_frame_->features_left_[i]);
             EdgeProjectionPoseOnly * edge = new EdgeProjectionPoseOnly(mp->pos_, K);
@@ -306,8 +306,7 @@ int Frontend::EstimateCurrentPose() {
         }
     }
     
-    //TODO 设置为yaml文件参数
-    const double chi2_th = 5.991;
+    const double chi2_th = Config::Get<double>("chi2_th");
     int cnt_outlier = 0;
     for(int itertation = 0; itertation < 4 ; ++itertation){
         vertex_pose->setEstimate(current_frame_->Pose());
@@ -342,10 +341,10 @@ int Frontend::EstimateCurrentPose() {
     for (auto &feat : features){
         if(feat -> is_outlier_){
             feat->map_point_.reset();
-            // TODO 添加测试,据说以后会用到
             feat->is_outlier_ = false;
         }
-    }return features.size() - cnt_outlier;
+    }
+    return features.size() - cnt_outlier;
 }
 
 int Frontend::TrackLastFrame() {
