@@ -30,11 +30,12 @@ void Map::InsertKeyFrame(Frame::Ptr frame) {
     if (keyframes_.find(frame->keyframe_id_) == keyframes_.end()) {
         keyframes_.insert(make_pair(frame->keyframe_id_, frame));
         active_keyframes_.insert(make_pair(frame->keyframe_id_, frame));
-    } else {//TODO 判断下面语句是否有用
-        // std::cout<<frame->keyframe_id_;
-        keyframes_[frame->keyframe_id_] = frame;
-        active_keyframes_[frame->keyframe_id_] = frame;
-    }
+    } 
+    // else {
+    //     // std::cout<<frame->keyframe_id_;
+    //     keyframes_[frame->keyframe_id_] = frame;
+    //     active_keyframes_[frame->keyframe_id_] = frame;
+    // }
 
     if (active_keyframes_.size() > num_active_keyframes_) {
         RemoveOldKeyframe();
@@ -45,11 +46,11 @@ void Map::InsertMapPoint(MapPoint::Ptr map_point) {
     if (landmarks_.find(map_point->id_) == landmarks_.end()) {
         landmarks_.insert(make_pair(map_point->id_, map_point));
         active_landmarks_.insert(make_pair(map_point->id_, map_point));
-    } else {
-        //TODO 判断 同上
-        landmarks_[map_point->id_] = map_point;
-        active_landmarks_[map_point->id_] = map_point;
-    }
+    } 
+    // else {
+    //     landmarks_[map_point->id_] = map_point;
+    //     active_landmarks_[map_point->id_] = map_point;
+    // }
 }
 
 void Map::RemoveOldKeyframe() {
@@ -71,8 +72,6 @@ void Map::RemoveOldKeyframe() {
         }
     }
 
-
-    //TODO 设置为参数
     const double min_dis_th = Config::Get<double>("min_dis_th");  // 最近阈值
     Frame::Ptr frame_to_remove = nullptr;
     if (min_dis < min_dis_th) {
