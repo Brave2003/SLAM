@@ -14,5 +14,16 @@ num_features: 150
 num_features_init: 50
 num_features_tracking: 50
 
+## 参数配置
+# 内外点比例阈值
 chi2_th: 5.991
+# 相邻最近关键帧的最大距离
 min_dis_th: 0.2
+
+## 方法配置
+# 保存轨迹文件
+is_save_trajectory: true
+save_dir: /home/brave/Desktop/output
+trajectory_file_name: "trajectory.txt"
+
+

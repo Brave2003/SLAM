@@ -110,6 +110,8 @@ class Frontend {
      */
     void SetObservationsForKeyFrame();
 
+    void SaveTrajectoryFile(const std::string filepath);
+
     // data
     FrontendStatus status_ = FrontendStatus::INITING;
 
@@ -135,6 +137,8 @@ class Frontend {
 
     // utilities
     cv::Ptr<cv::GFTTDetector> gftt_;  // feature detector in opencv
+
+    std::vector<SE3> poses_;
 };
 
 }  // namespace myslam

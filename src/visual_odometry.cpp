@@ -49,6 +49,9 @@ namespace myslam
 
         backend_->Stop();
         viewer_->Close();
+        if(Config::Get<bool>("is_save_trajectory"))
+            frontend_->SaveTrajectoryFile(Config::Get<std::string>("save_dir"));
+
 
         LOG(INFO) << "VO exit";
     }
