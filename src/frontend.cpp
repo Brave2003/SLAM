@@ -385,6 +385,7 @@ namespace myslam
 
         LOG(INFO) << "Outlier/Inlier in pose estimating: " << cnt_outlier << "/" << features.size() - cnt_outlier;
         current_frame_->SetPose(vertex_pose->estimate());
+        poses_.push_back(vertex_pose->estimate());
 
         LOG(INFO) << "Current Pose = \n"
                   << current_frame_->Pose().matrix();
