@@ -4,6 +4,7 @@
 
 #include <pangolin/pangolin.h>
 #include <opencv2/opencv.hpp>
+#include "myslam/config.h"
 
 namespace myslam{
     Viewer::Viewer() {
@@ -24,7 +25,11 @@ namespace myslam{
         std::unique_lock<std::mutex> lck(viewer_data_mutex_);
         assert(map_ != nullptr);
         active_keyframes_ = map_->GetActiveKeyFrames();
-        active_landmarks_ = map_->GetAllMapPoints();
+        if(Config::Get<bool>("update_map_all")){
+            active_landmarks_ = map_->GetActiveMapPoints();
+        }else{
+            active_landmarks_ = map_->GetAllMapPoints();
+        }
         map_updated_ = true;
     }
 
