@@ -1,21 +1,17 @@
 #include <iostream>
 #include <fstream>
+#include <unistd.h>
+#include "myslam/common_include.h"
 #include "myslam/savefile.h"
+
+
 namespace myslam
-{
-    static bool SaveFile::SE32TUM(const std::string &filepath, const std::string &filename, const std::vector<Sophus::SE3d> &poses, const std::vector<double> &timestamps)
+{   
+    bool SaveFile::SE32TUM(const std::string &filepath, const std::string &filename, const std::vector<Sophus::SE3d> &poses, const std::vector<double> &timestamps)
     {
         // 检查文件是否存在
         std::string file_ = filepath + "/" + filename;
-        if (fs::exists(file_))
-        {
-            LOG(INFO) << "File already exists: " << filename << " ,and will cover it";
-            std::ofstream file(file_, std::ofstream::out);
-        }
-        else
-        {
-            std::ofstream file(file_);
-        }
+        std::ofstream file(file_, std::ofstream::out);
 
         if (!file.is_open())
         {
@@ -39,16 +35,16 @@ namespace myslam
 
         file.close();
         return true;
-    }
+    };
 
-    static std::vector<double> ReadTimeStampsFile(const std::string &filepath)
+    std::vector<double> SaveFile::ReadTimeStampsFile(const std::string &filepath)
     {
         std::ifstream file(filepath+"/"+"times.txt");         // 打开文件用于读取
 
         if (!file.is_open())
         {
-            LOG(ERROR) << "Could not open the timestamps file : " << Timefile << std::endl;
-            return 1; // 返回错误代码
+            LOG(ERROR) << "Could not open the timestamps file : " << filepath << std::endl;
+            return {}; // 返回错误代码
         }
 
         std::string line;
@@ -64,5 +60,5 @@ namespace myslam
         file.close(); // 关闭文件
 
         return timeStamps; // 程序正常结束
-    }
+    };
 }

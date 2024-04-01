@@ -13,7 +13,7 @@ namespace myslam{
 
         private:
             SaveFile() = delete;
-    }
-}
+    };
+};
 
 #endif

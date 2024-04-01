@@ -9,7 +9,9 @@ add_library(myslam SHARED
         backend.cpp
         viewer.cpp
         visual_odometry.cpp
-        dataset.cpp)
+        dataset.cpp
+        savefile.cpp
+        )
 
 
 target_link_libraries(myslam

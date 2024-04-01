@@ -43,6 +43,8 @@ class Frontend {
         camera_right_ = right;
     }
 
+    void SaveTrajectoryFile(const std::string filepath);
+
    private:
     /**
      * Track in normal mode
@@ -110,7 +112,7 @@ class Frontend {
      */
     void SetObservationsForKeyFrame();
 
-    void SaveTrajectoryFile(const std::string filepath);
+    
 
     // data
     FrontendStatus status_ = FrontendStatus::INITING;
