@@ -24,8 +24,7 @@ namespace myslam
                 cv::GFTTDetector::create(Config::Get<int>("num_features"), 0.01, 20);
         }else{
             // TODO: 设置不同方法
-            gftt_ =
-                cv::GFTTDetector::create(Config::Get<int>("num_features"), 0.01, 20);
+            orb_ =cv::ORB::create();
         }
         num_features_init_ = Config::Get<int>("num_features_init");
         num_features_ = Config::Get<int>("num_features");
@@ -50,6 +49,7 @@ namespace myslam
         }
 
         last_frame_ = current_frame_;
+        poses_.push_back(current_frame_->Pose());
         return true;
     }
 
@@ -94,7 +94,11 @@ namespace myslam
                           feat->position_.pt + cv::Point2f(10, 10), 0, CV_FILLED);
         }
         std::vector<cv::KeyPoint> keypoints;
-        gftt_->detect(current_frame_->left_img_, keypoints, mask);
+        if(Config::Get<std::string>("capture_feature_function")=="GFTT"){
+            gftt_->detect(current_frame_->left_img_, keypoints, mask);
+        }else{
+            orb_->detectAndCompute(current_frame_->left_img_, mask, keypoints, current_frame_->descriptors_);
+        }
         int cnt_detected = 0;
         for (auto &kp : keypoints)
         {
@@ -203,10 +207,13 @@ namespace myslam
         if (last_frame_)
         {
             current_frame_->SetPose(relative_motion_ * last_frame_->Pose());
+
         }
         // 跟踪
         int num_track_last = TrackLastFrame();
         tracking_inliers_ = EstimateCurrentPose();
+
+
 
         if (tracking_inliers_ > num_features_tracking_)
         {
@@ -391,7 +398,6 @@ namespace myslam
 
         LOG(INFO) << "Outlier/Inlier in pose estimating: " << cnt_outlier << "/" << features.size() - cnt_outlier;
         current_frame_->SetPose(vertex_pose->estimate());
-        poses_.push_back(vertex_pose->estimate());
 
         LOG(INFO) << "Current Pose = \n"
                   << current_frame_->Pose().matrix();
@@ -461,19 +467,6 @@ namespace myslam
     {
         LOG(INFO) << "Reset is not implemented. ";
         return true;
-    }
-
-    void Frontend::SaveTrajectoryFile(const std::string filepath)
-    {
-        if (SaveFile::SE32TUM(filepath,
-                Config::Get<std::string>("trajectory_file_name"),
-                poses_,
-                SaveFile::ReadTimeStampsFile(Config::Get<std::string>("dataset_dir") + "/" + "times.txt")))
-        {
-            LOG(INFO) << "Save trajectory file to : " << filepath;
-        }
-        else
-            LOG(ERROR) << "Couldn't save trajectory file to: " << filepath;
     }
 
 } // namespace myslam

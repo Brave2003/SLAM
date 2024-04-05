@@ -1,0 +1,8 @@
+//
+// Created by brave on 24-4-5.
+//
+
+#ifndef MYSLAM_KEYFRAMEDATABASE_H
+#define MYSLAM_KEYFRAMEDATABASE_H
+
+#endif //MYSLAM_KEYFRAMEDATABASE_H

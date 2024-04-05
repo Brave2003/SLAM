@@ -20,6 +20,7 @@ chi2_th: 5.991
 # 相邻最近关键帧的最大距离
 min_dis_th: 0.2
 
+
 ## 方法配置
 # 保存轨迹文件
 is_save_trajectory: true

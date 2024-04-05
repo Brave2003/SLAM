@@ -1,8 +1,8 @@
 #include <iostream>
 #include <fstream>
 #include <unistd.h>
-#include "myslam/common_include.h"
 #include "myslam/savefile.h"
+
 
 
 namespace myslam
@@ -11,7 +11,7 @@ namespace myslam
     {
         // 检查文件是否存在
         std::string file_ = filepath + "/" + filename;
-        std::ofstream file(file_, std::ofstream::out);
+        std::ofstream file(file_);
 
         if (!file.is_open())
         {
@@ -21,7 +21,7 @@ namespace myslam
 
         for (size_t i = 0; i < poses.size(); ++i)
         {
-            const Sophus::SE3d &pose = poses[i];
+            const Sophus::SE3d &pose = poses[i].inverse();
             const double timestamp = timestamps[i];
 
             // 提取旋转四元数和平移向量
@@ -29,27 +29,35 @@ namespace myslam
             Eigen::Vector3d translation = pose.translation();
 
             // 写入TUM格式的数据到文件
-            file << timestamp << " " << quaternion.w() << " " << quaternion.x() << " " << quaternion.y() << " " << quaternion.z() << " "
-                 << translation(0) << " " << translation(1) << " " << translation(2) << std::endl;
+            file << timestamp << " "
+                 << translation(0) << " "
+                 << translation(1) << " "
+                 << translation(2) << " "
+                 << quaternion.x() << " "
+                 << quaternion.y() << " "
+                 << quaternion.z() << " "
+                 << quaternion.w()
+                 << std::endl;
         }
 
         file.close();
+        LOG(INFO) << "Finish write trajectory file";
         return true;
     };
 
-    std::vector<double> SaveFile::ReadTimeStampsFile(const std::string &filepath)
+    std::vector<double> SaveFile::ReadTimeStampsFile(const std::string &filename)
     {
-        std::ifstream file(filepath+"/"+"times.txt");         // 打开文件用于读取
+        std::ifstream file_(filename);         // 打开文件用于读取
 
-        if (!file.is_open())
+        if (!file_.is_open())
         {
-            LOG(ERROR) << "Could not open the timestamps file : " << filepath << std::endl;
+            LOG(ERROR) << "Could not open the timestamps file : " << filename << std::endl;
             return {}; // 返回错误代码
         }
 
         std::string line;
         std::vector<double> timeStamps={};
-        while (std::getline(file, line))
+        while (std::getline(file_, line))
         { // 使用getline读取每一行
             // 在这里处理每一行的内容
 
@@ -57,8 +65,42 @@ namespace myslam
             timeStamps.push_back(value);
         }
 
-        file.close(); // 关闭文件
+        file_.close(); // 关闭文件
 
         return timeStamps; // 程序正常结束
     };
+
+    void SaveFile::SaveTrajectoryFile(const std::string& filepath, std::vector< Frame::Ptr> keyframes)
+    {
+        std::vector<Sophus::SE3d> poses;
+        SE3 inital_pose = keyframes[0]->Pose().inverse();
+        for(const auto& frame: keyframes){
+            poses.push_back(frame->Pose()*inital_pose);
+        }
+
+        if (SaveFile::SE32TUM(filepath,
+                Config::Get<std::string>("trajectory_file_name"),
+                poses,
+                SaveFile::ReadTimeStampsFile(Config::Get<std::string>("dataset_dir") + "/" + "times.txt")))
+        {
+            LOG(INFO) << "Save trajectory file to : " << filepath;
+        }
+        else
+            LOG(ERROR) << "Couldn't save trajectory file to: " << filepath;
+    }
+    void SaveFile::SaveTrajectoryFile(const std::string& filepath, std::vector< SE3> poses)
+    {
+
+
+
+        if (SaveFile::SE32TUM(filepath,
+                              Config::Get<std::string>("trajectory_file_name"),
+                              poses,
+                              SaveFile::ReadTimeStampsFile(Config::Get<std::string>("dataset_dir") + "/" + "times.txt")))
+        {
+            LOG(INFO) << "Save trajectory file to : " << filepath;
+        }
+        else
+            LOG(ERROR) << "Couldn't save trajectory file to: " << filepath;
+    }
 }

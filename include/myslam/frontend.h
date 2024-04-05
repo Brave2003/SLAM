@@ -43,7 +43,9 @@ class Frontend {
         camera_right_ = right;
     }
 
-    void SaveTrajectoryFile(const std::string filepath);
+    std::vector<Frame::Ptr > GetFrames(){return frames_;}
+    std::vector<SE3> GetPoses(){return poses_;}
+
 
    private:
     /**
@@ -122,6 +124,9 @@ class Frontend {
     Camera::Ptr camera_left_ = nullptr;   // 左侧相机
     Camera::Ptr camera_right_ = nullptr;  // 右侧相机
 
+    std::vector<Frame::Ptr> frames_;
+    std::vector<SE3> poses_;
+
     Map::Ptr map_ = nullptr;
     std::shared_ptr<Backend> backend_ = nullptr;
     std::shared_ptr<Viewer> viewer_ = nullptr;
@@ -139,8 +144,8 @@ class Frontend {
 
     // utilities
     cv::Ptr<cv::GFTTDetector> gftt_;  // feature detector in opencv
+    cv::Ptr<cv::ORB> orb_;
 
-    std::vector<SE3> poses_;
 };
 
 }  // namespace myslam

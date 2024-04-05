@@ -60,7 +60,7 @@ class Map {
     LandmarksType landmarks_;         // all landmarks
     LandmarksType active_landmarks_;  // active landmarks
     KeyframesType keyframes_;         // all key-frames
-    KeyframesType active_keyframes_;  // all key-frames
+    KeyframesType active_keyframes_;  // active key-frames
 
     Frame::Ptr current_frame_ = nullptr;
 

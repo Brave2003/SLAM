@@ -7,6 +7,7 @@
 #include "myslam/dataset.h"
 #include "myslam/frontend.h"
 #include "myslam/viewer.h"
+#include "myslam/savefile.h"
 
 namespace myslam{
     class VisualOdometry{

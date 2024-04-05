@@ -46,6 +46,8 @@ namespace myslam{
             std::atomic<bool> backend_running_;
 
             Camera::Ptr cam_left_ = nullptr, cam_right_ = nullptr;
+
+            std::vector<SE3> poses_;
     };
 }
 

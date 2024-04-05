@@ -6,6 +6,8 @@
 #include <opencv2/opencv.hpp>
 #include "myslam/config.h"
 
+#include "myslam/savefile.h"
+
 namespace myslam{
     Viewer::Viewer() {
         viewer_thread_ = std::thread(std::bind(&Viewer::ThreadLoop, this));
@@ -14,6 +16,7 @@ namespace myslam{
     void Viewer::Close() {
         viewer_running_ = false;
         viewer_thread_.join();
+
     }
 
     void Viewer::AddCurrentFrame(Frame::Ptr current_frame) {
@@ -25,7 +28,7 @@ namespace myslam{
         std::unique_lock<std::mutex> lck(viewer_data_mutex_);
         assert(map_ != nullptr);
         active_keyframes_ = map_->GetActiveKeyFrames();
-        if(Config::Get<int>("update_map_all")){
+        if(Config::Get<int>("update_map_all")==0){
             active_landmarks_ = map_->GetActiveMapPoints();
         }else{
             active_landmarks_ = map_->GetAllMapPoints();

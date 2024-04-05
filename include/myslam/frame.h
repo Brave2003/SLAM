@@ -34,6 +34,8 @@ struct Frame {
     // corresponding features in right image, set to nullptr if no corresponding
     std::vector<std::shared_ptr<Feature>> features_right_;
 
+    cv::Mat descriptors_;
+
    public:  // data members
     Frame() {}
 
