@@ -51,7 +51,7 @@ namespace myslam{
         unsigned long max_kf_id = 0;
         for (auto &keyframe : keyframes){
             auto kf = keyframe.second;
-            VertexPose *vertex_pose = new VertexPose();
+            auto *vertex_pose = new VertexPose();
             vertex_pose -> setId(kf->keyframe_id_);
             vertex_pose -> setEstimate(kf->Pose());
             optimizer.addVertex(vertex_pose);
@@ -68,7 +68,7 @@ namespace myslam{
         SE3 right_ext = cam_right_ -> pose();
 
         int index = 1;
-        double chi2_th = Config::Get<double>("chi2_th");
+        auto chi2_th = Config::Get<double>("chi2_th");
 
         std::map<EdgeProjection *, Feature::Ptr> edges_and_features;
 
@@ -91,7 +91,7 @@ namespace myslam{
 
                 // 如果landmark还没有被加入优化，则新加一个顶点
                 if (vertices_landmarks.find(landmark_id) ==vertices_landmarks.end()) {
-                    VertexXYZ *v = new VertexXYZ;
+                    auto *v = new VertexXYZ;
                     v->setEstimate(landmark.second->Pos());
                     v->setId(landmark_id + max_kf_id + 1);
                     v->setMarginalized(true);

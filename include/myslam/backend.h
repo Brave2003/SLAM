@@ -6,7 +6,6 @@
 #include "myslam/map.h"
 
 namespace myslam{
-    class Map;
 
     class Backend{
         public:

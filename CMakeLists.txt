@@ -45,6 +45,9 @@ include_directories(${GFLAGS_INCLUDE_DIRS})
 find_package(CSparse REQUIRED)
 include_directories(${CSPARSE_INCLUDE_DIR})
 
+set( DBoW3_INCLUDE_DIRS "/usr/local/include" )
+set( DBoW3_LIBS "/usr/local/lib/libDBoW3.a" )
+
 set(THIRD_PARTY_LIBS
         ${OpenCV_LIBS}
         ${Sophus_LIBRARIES}
@@ -56,6 +59,7 @@ set(THIRD_PARTY_LIBS
         pthread
         ${CSPARSE_LIBRARY}
         fmt
+        ${DBoW3_LIBS}
         )
 
 enable_testing()

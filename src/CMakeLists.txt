@@ -11,7 +11,10 @@ add_library(myslam SHARED
         visual_odometry.cpp
         dataset.cpp
         savefile.cpp
-        )
+        keyframedatabase.cpp
+        loopclosure.cpp
+
+)
 
 
 target_link_libraries(myslam
