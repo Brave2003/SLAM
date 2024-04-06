@@ -23,8 +23,9 @@ namespace myslam{
 
         DBoW3::Database& GetDatabase();
 
-        KeyframesMap GetAllKeyFrames();
+        KeyframesMap GetKeyFramesMap();
 
+        std::vector<Frame::Ptr> GetALLKeyFrames();
 
         bool InitialDatabase();
 

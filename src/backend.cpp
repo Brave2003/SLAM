@@ -151,11 +151,14 @@ namespace myslam{
 
         LOG(INFO) << "Outlier/Inlier in optimization: " << cnt_outlier << "/" <<cnt_inlier;
 
-        for(auto &c: vertices){
-            keyframes.at(c.first)->SetPose(c.second->estimate());
-        }
-        for (auto &v : vertices_landmarks) {
-            landmarks.at(v.first)->SetPos(v.second->estimate());
+        {
+            std::unique_lock<std::mutex> lock(map_->data_mutex_);
+            for(auto &c: vertices){
+                keyframes.at(c.first)->SetPose(c.second->estimate());
+            }
+            for (auto &v : vertices_landmarks) {
+                landmarks.at(v.first)->SetPos(v.second->estimate());
+            }
         }
     }
 }

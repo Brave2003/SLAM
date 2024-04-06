@@ -7,11 +7,11 @@
 #include "myslam/common_include.h"
 #include "myslam/frame.h"
 #include "myslam/map.h"
+#include "myslam/loopclosure.h"
+#include "myslam/viewer.h"
+#include "myslam/backend.h"
 
 namespace myslam {
-
-class Backend;
-class Viewer;
 
 enum class FrontendStatus { INITING, TRACKING_GOOD, TRACKING_BAD, LOST };
 
@@ -36,6 +36,8 @@ class Frontend {
 
     void SetViewer(std::shared_ptr<Viewer> viewer) { viewer_ = viewer; }
 
+    void SetLoopColsure(LoopClosure::Ptr loop){ loop_ = loop; }
+
     FrontendStatus GetStatus() const { return status_; }
 
     void SetCameras(Camera::Ptr left, Camera::Ptr right) {
@@ -43,8 +45,6 @@ class Frontend {
         camera_right_ = right;
     }
 
-    std::vector<Frame::Ptr > GetFrames(){return frames_;}
-    std::vector<SE3> GetPoses(){return poses_;}
 
 
    private:
@@ -124,12 +124,10 @@ class Frontend {
     Camera::Ptr camera_left_ = nullptr;   // 左侧相机
     Camera::Ptr camera_right_ = nullptr;  // 右侧相机
 
-    std::vector<Frame::Ptr> frames_;
-    std::vector<SE3> poses_;
-
     Map::Ptr map_ = nullptr;
-    std::shared_ptr<Backend> backend_ = nullptr;
-    std::shared_ptr<Viewer> viewer_ = nullptr;
+    Backend::Ptr backend_ = nullptr;
+    Viewer::Ptr viewer_ = nullptr;
+    LoopClosure::Ptr loop_ = nullptr;
 
     SE3 relative_motion_;  // 当前帧与上一帧的相对运动，用于估计当前帧pose初值
 
@@ -145,6 +143,8 @@ class Frontend {
     // utilities
     cv::Ptr<cv::GFTTDetector> gftt_;  // feature detector in opencv
     cv::Ptr<cv::ORB> orb_;
+
+
 
 };
 

@@ -38,6 +38,10 @@ namespace myslam{
 
         void Stop();
 
+        KeyFrameDatabase::Ptr GetKeyFrameDatabase(){
+            return KF_database_;
+        }
+
     private:
 
         void LoopClosureLoop();

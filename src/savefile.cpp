@@ -73,9 +73,8 @@ namespace myslam
     void SaveFile::SaveTrajectoryFile(const std::string& filepath, std::vector< Frame::Ptr> keyframes)
     {
         std::vector<Sophus::SE3d> poses;
-        SE3 inital_pose = keyframes[0]->Pose().inverse();
         for(const auto& frame: keyframes){
-            poses.push_back(frame->Pose()*inital_pose);
+            poses.push_back(frame->Pose());
         }
 
         if (SaveFile::SE32TUM(filepath,

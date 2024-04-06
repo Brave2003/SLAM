@@ -194,11 +194,14 @@ namespace myslam {
                   << cnt_inlier;
 
         // Set pose and lanrmark position
-        for (auto &v : vertices) {
-            keyframes.at(v.first)->SetPose(v.second->estimate());
-        }
-        for (auto &v : vertices_landmarks) {
-            landmarks.at(v.first)->SetPos(v.second->estimate());
+        {
+            std::unique_lock<std::mutex> lock(map_->data_mutex_);
+            for(auto &c: vertices){
+                keyframes.at(c.first)->SetPose(c.second->estimate());
+            }
+            for (auto &v : vertices_landmarks) {
+                landmarks.at(v.first)->SetPos(v.second->estimate());
+            }
         }
 
     }

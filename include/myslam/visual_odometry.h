@@ -8,6 +8,7 @@
 #include "myslam/frontend.h"
 #include "myslam/viewer.h"
 #include "myslam/savefile.h"
+#include "myslam/loopclosure.h"
 
 namespace myslam{
     class VisualOdometry{
@@ -37,6 +38,8 @@ namespace myslam{
         Viewer::Ptr viewer_ = nullptr;
 
         Dataset::Ptr dataset_ = nullptr;
+
+        LoopClosure::Ptr loop_ = nullptr;
     };
 }
 

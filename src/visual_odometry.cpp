@@ -22,16 +22,21 @@ namespace myslam
         backend_ = Backend::Ptr(new Backend);
         map_ = Map::Ptr(new Map);
         viewer_ = Viewer::Ptr(new Viewer);
+        loop_ = LoopClosure::Ptr(new LoopClosure);
 
         frontend_->SetBackend(backend_);
         frontend_->SetMap(map_);
         frontend_->SetViewer(viewer_);
         frontend_->SetCameras(dataset_->GetCamera(0), dataset_->GetCamera(1));
+        frontend_->SetLoopColsure(loop_);
 
         backend_->SetMap(map_);
         backend_->SetCameras(dataset_->GetCamera(0), dataset_->GetCamera(1));
 
         viewer_->SetMap(map_);
+
+        loop_->SetCameras(dataset_->GetCamera(0), dataset_->GetCamera(1));
+        loop_->SetMap(map_);
 
         return true;
     }
@@ -50,8 +55,9 @@ namespace myslam
         backend_->Stop();
         LOG(INFO) << "Backend is stopping";
         viewer_->Close();
+        loop_->Stop();
         if(Config::Get<int>("is_save_trajectory"))
-            SaveFile::SaveTrajectoryFile(Config::Get<std::string>("save_dir"), frontend_->GetPoses());
+            SaveFile::SaveTrajectoryFile(Config::Get<std::string>("save_dir"), loop_->GetKeyFrameDatabase()->GetALLKeyFrames());
 
         LOG(INFO) << "VO exit";
     }

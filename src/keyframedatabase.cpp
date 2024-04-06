@@ -10,9 +10,17 @@ namespace myslam{
         return database_;
     }
 
-    KeyFrameDatabase::KeyframesMap KeyFrameDatabase::GetAllKeyFrames() {
+    KeyFrameDatabase::KeyframesMap KeyFrameDatabase::GetKeyFramesMap() {
         std::unique_lock<std::mutex> lck(mutex_);
         return keyframes_;
+    }
+
+    std::vector<Frame::Ptr> KeyFrameDatabase::GetALLKeyFrames() {
+        std::vector<Frame::Ptr> frames;
+        for(const auto& KF : keyframes_){
+            frames.push_back(KF.second);
+        }
+        return frames;
     }
 
     void KeyFrameDatabase::InsertKeyFrame(Frame::Ptr frame) {

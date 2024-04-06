@@ -32,6 +32,7 @@ namespace myslam
 
     bool Frontend::AddFrame(Frame::Ptr frame)
     {
+        std::unique_lock<std::mutex> lock(map_->data_mutex_);
         current_frame_ = frame;
 
         switch (status_)
@@ -49,7 +50,6 @@ namespace myslam
         }
 
         last_frame_ = current_frame_;
-        poses_.push_back(current_frame_->Pose());
         return true;
     }
 
@@ -249,7 +249,7 @@ namespace myslam
         // current frame is a new keyframe
         current_frame_->SetKeyFrame();
         map_->InsertKeyFrame(current_frame_);
-
+        loop_->InsertKeyFrame(current_frame_);
         LOG(INFO) << "Set frame " << current_frame_->id_ << " as keyframe "
                   << current_frame_->keyframe_id_;
 
@@ -262,6 +262,7 @@ namespace myslam
         TriangulateNewPoints();
         // update backend because we have a new keyframe
         backend_->UpdateMap();
+        loop_->UpdateMap();
 
         if (viewer_)
             viewer_->UpdateMap();
