@@ -17,12 +17,12 @@ namespace myslam
         dataset_ = Dataset::Ptr(new Dataset(Config::Get<std::string>("dataset_dir")));
         // test
         CHECK_EQ(dataset_->Init(), true);
-
         frontend_ = Frontend::Ptr(new Frontend);
         backend_ = Backend::Ptr(new Backend);
         map_ = Map::Ptr(new Map);
         viewer_ = Viewer::Ptr(new Viewer);
         loop_ = LoopClosure::Ptr(new LoopClosure);
+
 
         frontend_->SetBackend(backend_);
         frontend_->SetMap(map_);

@@ -32,3 +32,6 @@ capture_feature_function: "GFTT"
 
 # 建图 全局 or 局部
 update_map_all: true
+
+# 回环文件名字
+loop_model_name: "model.yml.gz"

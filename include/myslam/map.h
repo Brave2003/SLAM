@@ -5,6 +5,7 @@
 #include "myslam/common_include.h"
 #include "myslam/frame.h"
 #include "myslam/mappoint.h"
+#include "myslam/feature.h"
 
 namespace myslam {
 
@@ -47,6 +48,34 @@ class Map {
     KeyframesType GetActiveKeyFrames() {
         std::unique_lock<std::mutex> lck(data_mutex_);
         return active_keyframes_;
+    }
+
+    KeyframesType GetLoopKeyFrames(const int start, const int end){
+        std::unique_lock<std::mutex> lck(data_mutex_);
+        KeyframesType loopKeyFrames;
+        for(const auto& KF: keyframes_){
+            if(KF.first>=start&&KF.first<=end){
+                loopKeyFrames.insert(KF);
+            }
+        }
+        return loopKeyFrames;
+    }
+
+    LandmarksType GetLoopMapPoints(const int start, const int end){
+        KeyframesType loopKeyFrames = GetLoopKeyFrames(start, end);
+        LandmarksType loopMapPoints;
+        for(const auto& KF: loopKeyFrames){
+            Frame::Ptr frame = KF.second;
+            for(size_t i=0;i<frame->features_left_.size();i++){
+                if(frame->features_left_[i]->map_point_.expired() &&
+                        frame->features_right_[i] != nullptr){
+                    auto p = frame->features_left_[i]->map_point_.lock();
+                    loopMapPoints.insert(make_pair(p->id_, p));
+                }
+
+            }
+        }
+        return loopMapPoints;
     }
 
     /// 清理map中观测数量为零的点

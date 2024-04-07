@@ -8,6 +8,12 @@
 #include "common_include.h"
 #include "frame.h"
 #include "DBoW3/DBoW3.h"
+#include <opencv2/opencv.hpp>
+#define BOOST_NO_CXX11_SCOPED_ENUMS
+#include <boost/filesystem.hpp>
+#undef BOOST_NO_CXX11_SCOPED_ENUMS
+#include "myslam/config.h"
+
 
 namespace myslam{
 
@@ -17,7 +23,7 @@ namespace myslam{
         typedef std::shared_ptr<KeyFrameDatabase> Ptr;
         typedef std::unordered_map<unsigned long, Frame::Ptr> KeyframesMap;
 
-        KeyFrameDatabase():database_(DBoW3::Vocabulary(), false, 0){};
+        KeyFrameDatabase();
 
         void InsertKeyFrame(Frame::Ptr frame);
 

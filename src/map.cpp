@@ -31,11 +31,11 @@ void Map::InsertKeyFrame(Frame::Ptr frame) {
         keyframes_.insert(make_pair(frame->keyframe_id_, frame));
         active_keyframes_.insert(make_pair(frame->keyframe_id_, frame));
     } 
-    // else {
-    //     // std::cout<<frame->keyframe_id_;
-    //     keyframes_[frame->keyframe_id_] = frame;
-    //     active_keyframes_[frame->keyframe_id_] = frame;
-    // }
+     else {
+         // std::cout<<frame->keyframe_id_;
+         keyframes_[frame->keyframe_id_] = frame;
+         active_keyframes_[frame->keyframe_id_] = frame;
+     }
 
     if (active_keyframes_.size() > num_active_keyframes_) {
         RemoveOldKeyframe();
@@ -47,10 +47,10 @@ void Map::InsertMapPoint(MapPoint::Ptr map_point) {
         landmarks_.insert(make_pair(map_point->id_, map_point));
         active_landmarks_.insert(make_pair(map_point->id_, map_point));
     } 
-    // else {
-    //     landmarks_[map_point->id_] = map_point;
-    //     active_landmarks_[map_point->id_] = map_point;
-    // }
+     else {
+         landmarks_[map_point->id_] = map_point;
+         active_landmarks_[map_point->id_] = map_point;
+     }
 }
 
 void Map::RemoveOldKeyframe() {

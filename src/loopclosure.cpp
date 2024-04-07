@@ -48,9 +48,10 @@ namespace myslam {
             map_update_.wait(lock);
 
             int loop_start_index = DetectLoop();
-            LOG(INFO)<<"Loop Detecting";
+
 
             if(loop_start_index >= 0){
+                LOG(INFO)<<"Loop Detecting frame " + loop_start_index ;
                 frame_passed_++;
 
                 if(frame_passed_==1){
@@ -59,11 +60,16 @@ namespace myslam {
 
 
                     //TODO 获得部分关键帧和路标点
-                    Map::KeyframesType loop_kfs;
-                    Map::LandmarksType loop_lms;
+                    Map::KeyframesType loop_kfs = map_->GetLoopKeyFrames(loop_start_index, loop_end_index);
+                    Map::LandmarksType loop_lms = map_->GetLoopMapPoints(loop_start_index, loop_end_index);
 
                     Optimize(loop_kfs, loop_lms);
 
+                }
+                else if (frame_passed_ > 5)
+                    frame_passed_ = 0;
+                else {
+                    frame_passed_++;
                 }
             }
         }

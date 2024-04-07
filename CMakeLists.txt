@@ -46,7 +46,16 @@ find_package(CSparse REQUIRED)
 include_directories(${CSPARSE_INCLUDE_DIR})
 
 set( DBoW3_INCLUDE_DIRS "/usr/local/include" )
-set( DBoW3_LIBS "/usr/local/lib/libDBoW3.a" )
+set( DBoW3_LIBS "/usr/local/lib/libDBoW3.so" )
+
+set(Boost_USE_STATIC_LIBS OFF)
+set(Boost_USE_MULTITHREADED ON)
+set(Boost_USE_STATIC_RUNTIME OFF)
+# 查找Boost库，包括Filesystem组件
+find_package(Boost REQUIRED COMPONENTS filesystem)
+# 包含必要的头文件搜索路径
+include_directories(${Boost_INCLUDE_DIRS})
+link_directories( ${Boost_LIBRARIES})
 
 set(THIRD_PARTY_LIBS
         ${OpenCV_LIBS}
@@ -60,6 +69,7 @@ set(THIRD_PARTY_LIBS
         ${CSPARSE_LIBRARY}
         fmt
         ${DBoW3_LIBS}
+        ${Boost_LIBRARIES}
         )
 
 enable_testing()

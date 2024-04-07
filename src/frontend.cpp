@@ -23,7 +23,6 @@ namespace myslam
             gftt_ =
                 cv::GFTTDetector::create(Config::Get<int>("num_features"), 0.01, 20);
         }else{
-            // TODO: 设置不同方法
             orb_ =cv::ORB::create();
         }
         num_features_init_ = Config::Get<int>("num_features_init");
@@ -32,7 +31,6 @@ namespace myslam
 
     bool Frontend::AddFrame(Frame::Ptr frame)
     {
-        std::unique_lock<std::mutex> lock(map_->data_mutex_);
         current_frame_ = frame;
 
         switch (status_)
