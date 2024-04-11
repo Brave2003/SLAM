@@ -10,7 +10,7 @@
 #include "myslam/loopclosure.h"
 #include "myslam/viewer.h"
 #include "myslam/backend.h"
-
+#include "myslam/ORBextractor.h"
 namespace myslam {
 
 enum class FrontendStatus { INITING, TRACKING_GOOD, TRACKING_BAD, LOST };
@@ -43,6 +43,9 @@ class Frontend {
     void SetCameras(Camera::Ptr left, Camera::Ptr right) {
         camera_left_ = left;
         camera_right_ = right;
+    }
+    void SetORB(ORBextractor::Ptr orb){
+        orb_ = orb;
     }
 
 
@@ -140,11 +143,15 @@ class Frontend {
     int num_features_tracking_bad_ = 20;
     int num_features_needed_for_keyframe_ = 80;
 
-    // utilities
-    cv::Ptr<cv::GFTTDetector> gftt_;  // feature detector in opencv
-    cv::Ptr<cv::ORB> orb_;
+//    // utilities
+//    cv::Ptr<cv::GFTTDetector> gftt_;  // feature detector in opencv
+//    cv::Ptr<cv::ORB> orb_;
 
+    ORBextractor::Ptr orb_, orb_initial_;
 
+    SE3 pose_relative_ = SE3();
+
+    Frame::Ptr last_keyframe_ = nullptr;
 
 };
 

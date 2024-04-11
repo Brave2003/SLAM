@@ -81,6 +81,13 @@ class Map {
     /// 清理map中观测数量为零的点
     void CleanMap();
 
+    void RemoveMapPoint(MapPoint::Ptr mappoint){
+        std::unique_lock<std::mutex> lock(data_mutex_);
+        unsigned long mappoint_id = mappoint->id_;
+        landmarks_.erase(mappoint_id);
+        active_landmarks_.erase(mappoint_id);
+    }
+
     std::mutex data_mutex_;
 
    private:

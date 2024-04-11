@@ -27,8 +27,8 @@ is_save_trajectory: true
 save_dir: /home/brave/Desktop/output
 trajectory_file_name: "trajectory.txt"
 
-# 特征提取方法
-capture_feature_function: "GFTT"
+## 特征提取方法
+#capture_feature_function: "GFTT"
 
 # 建图 全局 or 局部
 update_map_all: true

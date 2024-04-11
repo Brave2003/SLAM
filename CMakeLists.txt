@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0)
 project(myslam)
 
 set(CMAKE_BUILD_TYPE Release)
-
+set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_CXX_STANDARD 14)
 
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
@@ -45,8 +45,22 @@ include_directories(${GFLAGS_INCLUDE_DIRS})
 find_package(CSparse REQUIRED)
 include_directories(${CSPARSE_INCLUDE_DIR})
 
-set( DBoW3_INCLUDE_DIRS "/usr/local/include" )
-set( DBoW3_LIBS "/usr/local/lib/libDBoW3.so" )
+# caffe (default path: ~/caffe)
+add_definitions( -DCPU_ONLY=1 )
+if (NOT Caffe_ROOT_DIR)
+        set(Caffe_ROOT_DIR "/home/brave/Desktop/soft/caffe")
+endif()
+MESSAGE("${GREEN}Using Caffe_ROOT_DIR: ${Caffe_ROOT_DIR}${ENDL}")
+set(Caffe_LIBS ${Caffe_ROOT_DIR}/build/lib/libcaffe.so)
+set(Caffe_INCLUDE_DIRS ${Caffe_ROOT_DIR}/build/install/include)
+include_directories(${Caffe_INCLUDE_DIRS})
+
+# cuda (optional)
+find_package(CUDA QUIET)
+if (${CUDA_FOUND})
+        include_directories(${CUDA_INCLUDE_DIRS})
+        MESSAGE("CUDA_INCLUDE_DIRS: ${CUDA_INCLUDE_DIRS}")
+endif()
 
 set(Boost_USE_STATIC_LIBS OFF)
 set(Boost_USE_MULTITHREADED ON)
@@ -68,8 +82,12 @@ set(THIRD_PARTY_LIBS
         pthread
         ${CSPARSE_LIBRARY}
         fmt
-        ${DBoW3_LIBS}
+        ${Caffe_LIBS}
         ${Boost_LIBRARIES}
+        ${CMAKE_THREAD_LIBS_INIT}
+        ${CUDA_LIBRARIES}
+        ${CUDA_CUBLAS_LIBRARIES}
+        ${CUDA_curand_LIBRARY}
         )
 
 enable_testing()

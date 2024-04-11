@@ -11,6 +11,7 @@
 #include <g2o/core/sparse_optimizer.h>
 #include <g2o/solvers/csparse/linear_solver_csparse.h>
 #include <g2o/solvers/dense/linear_solver_dense.h>
+#include <g2o/solvers/eigen/linear_solver_eigen.h>
 
 #include "myslam/common_include.h"
 
@@ -175,6 +176,41 @@ namespace myslam {
         private:
             Mat33 _K;
             SE3 _cam_ext;
+    };
+
+    class EdgePoseGraph: public g2o::BaseBinaryEdge<6, SE3, VertexPose, VertexPose>{
+    public:
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+        virtual void computeError() override{
+            const VertexPose *vertex0 = static_cast<VertexPose *>(_vertices[0]);
+            const VertexPose *vertex1 = static_cast<VertexPose *>(_vertices[1]);
+            SE3 v0 = vertex0->estimate();
+            SE3 v1 = vertex1->estimate();
+            _error = (_measurement.inverse() * v0 * v1.inverse()).log();
+        }
+
+        // virtual void linearizeOplus() override {
+        //     // const VertexPose *vertex0 = static_cast<VertexPose *>(_vertices[0]);
+        //     const VertexPose *vertex1 = static_cast<VertexPose *>(_vertices[1]);
+        //     // SE3 v0 = vertex0->estimate();
+        //     SE3 v1 = vertex1->estimate();
+
+        //     Mat66 J;
+        //     SE3 Error = SE3::exp(_error);
+        //     J.block(0, 0, 3, 3) = Sophus::SO3d::hat(Error.so3().log());
+        //     J.block(0, 3, 3, 3) = Sophus::SO3d::hat(Error.translation());
+        //     J.block(3, 0, 3, 3) = Mat33::Zero(3, 3);
+        //     J.block(3, 3, 3, 3) = Sophus::SO3d::hat(Error.so3().log());
+        //     J = J * 0.5 + Mat66::Identity();
+
+        //     _jacobianOplusXi = -J * v1.inverse().Adj();
+        //     _jacobianOplusXj = J * v1.inverse().Adj();
+        // }
+
+        virtual bool read(std::istream &in) override { return true; }
+
+        virtual bool write(std::ostream &out) const override { return true; }
     };
 }
 #endif

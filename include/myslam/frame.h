@@ -5,6 +5,7 @@
 
 #include "myslam/camera.h"
 #include "myslam/common_include.h"
+#include "myslam/deeplcd.h"
 
 namespace myslam {
 
@@ -16,7 +17,7 @@ struct Feature;
  * 帧
  * 每一帧分配独立id，关键帧分配关键帧ID
  */
-struct Frame {
+class Frame {
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
     typedef std::shared_ptr<Frame> Ptr;
@@ -26,6 +27,7 @@ struct Frame {
     bool is_keyframe_ = false;       // 是否为关键帧
     double time_stamp_;              // 时间戳，暂不使用
     SE3 pose_;                       // Tcw 形式Pose
+    SE3 pose_relative_;
     std::mutex pose_mutex_;          // Pose数据锁
     cv::Mat left_img_, right_img_;   // stereo images
 
@@ -36,11 +38,21 @@ struct Frame {
 
     cv::Mat descriptors_;
 
+    std::weak_ptr<Frame> lastKeyFrame_;
+    SE3 relativePoseToLastKF;
+    std::weak_ptr<Frame> loopKeyFrame_;
+    SE3 relativePoseToLoopKF;
+
+    std::vector<cv::KeyPoint> keypoints_;
+
+    DeepLCD::DescrVector descrVector_;
+
    public:  // data members
     Frame() {}
 
     Frame(long id, double time_stamp, const SE3 &pose, const Mat &left,
           const Mat &right);
+
 
     // set and get pose, thread safe
     SE3 Pose() {
@@ -53,12 +65,25 @@ struct Frame {
         pose_ = pose;
     }
 
+    void SetPoseRelative(const SE3 &pose_relative){
+        std::unique_lock<std::mutex> lck(pose_mutex_);
+        pose_relative_ = pose_relative;
+    }
+
+    SE3 PoseRelative(){
+        std::unique_lock<std::mutex> lck(pose_mutex_);
+        return pose_relative_;
+    }
+
     /// 设置关键帧并分配并键帧id
     void SetKeyFrame();
 
     /// 工厂构建模式，分配id 
     static std::shared_ptr<Frame> CreateFrame();
 };
+
+
+
 
 }  // namespace myslam
 

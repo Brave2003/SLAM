@@ -11,8 +11,9 @@ add_library(myslam SHARED
         visual_odometry.cpp
         dataset.cpp
         savefile.cpp
-        keyframedatabase.cpp
         loopclosure.cpp
+        ORBextractor.cpp
+        deeplcd.cpp
 
 )
 

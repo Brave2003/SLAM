@@ -9,32 +9,79 @@
 namespace myslam{
     Backend::Backend(){
         backend_running_.store(true);
+        request_pause_.store(false);
+        pause_.store(false);
         backend_thread_ = std::thread(std::bind(&Backend::BackendLoop, this));
     }
 
-    void Backend::UpdateMap(){
-        std::unique_lock<std::mutex> lock(data_mutex_);
-        map_update_.notify_one();
+//    void Backend::UpdateMap(){
+//        std::unique_lock<std::mutex> lock(data_mutex_);
+//        map_update_.notify_one();
+//    }
+
+    void Backend::InsertKeyFrame(Frame::Ptr frame) {
+        std::unique_lock<std::mutex> lock(mutex_new_kf_);
+        new_keyframes_.push_back(frame);
+        need_optimization_ = true;
+
     }
+
+    void Backend::RequestPause(){
+        request_pause_.store(true);
+    }
+
+
+    bool Backend::isPaused(){
+        return (request_pause_.load()) && (pause_.load());
+    }
+
+
+    void Backend::Resume(){
+        request_pause_.store(false);
+    }
+
 
     void Backend::Stop(){
         backend_running_.store(false);
-        map_update_.notify_one();
+        // _mapUpdate.notify_one();
         backend_thread_.join();
+    }
+
+    bool Backend::CheckNewKeyFrames() {
+        std::unique_lock<std::mutex> lock(mutex_new_kf_);
+        return (!new_keyframes_.empty());
+    }
+
+    void Backend::ProcessNewKeyFrame() {
+        {
+            std::unique_lock<std::mutex> lock(mutex_new_kf_);
+            currentKF = new_keyframes_.front();
+            new_keyframes_.pop_front();
+        }
+        map_->InsertKeyFrame(currentKF);
+        loop_->InsertKeyFrame(currentKF);
     }
 
     void Backend::BackendLoop(){
         while(backend_running_.load()){
-            std::unique_lock<std::mutex>  lock(data_mutex_);
-            map_update_.wait(lock);
+            while(CheckNewKeyFrames())
+                ProcessNewKeyFrame();
 
-            Map::KeyframesType active_kfs = map_->GetActiveKeyFrames();
-            Map::LandmarksType active_lms = map_->GetActiveMapPoints();
-            Optimize(active_kfs, active_lms);
+            while(request_pause_.load()){
+                pause_.store(true);
+                usleep(1000);
+            }
+            pause_.store(false);
+
+            if(!CheckNewKeyFrames() && need_optimization_){
+                Optimize();
+                need_optimization_ = false;
+            }
+            usleep(1000);
         }
     }
 
-    void Backend::Optimize(Map::KeyframesType &keyframes, Map::LandmarksType &landmarks){
+    void Backend::Optimize(){
         typedef g2o::BlockSolver_6_3 BlockSolverType;
         typedef g2o::LinearSolverCSparse<BlockSolverType::PoseMatrixType> LinearSolverType;
         auto solver = new g2o::OptimizationAlgorithmLevenberg(
@@ -45,6 +92,8 @@ namespace myslam{
         g2o::SparseOptimizer optimizer;
         optimizer.setAlgorithm(solver);
 
+        Map::KeyframesType keyframes = map_->GetActiveKeyFrames();
+        Map::LandmarksType landmarks = map_->GetActiveMapPoints();
 
         //vertex
         std::map<unsigned long, VertexPose *> vertices;
@@ -96,6 +145,7 @@ namespace myslam{
                     v->setId(landmark_id + max_kf_id + 1);
                     v->setMarginalized(true);
                     vertices_landmarks.insert({landmark_id, v});
+
                     optimizer.addVertex(v);
                 }
 

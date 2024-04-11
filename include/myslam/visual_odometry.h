@@ -9,6 +9,7 @@
 #include "myslam/viewer.h"
 #include "myslam/savefile.h"
 #include "myslam/loopclosure.h"
+#include "myslam/ORBextractor.h"
 
 namespace myslam{
     class VisualOdometry{
@@ -40,6 +41,9 @@ namespace myslam{
         Dataset::Ptr dataset_ = nullptr;
 
         LoopClosure::Ptr loop_ = nullptr;
+
+        ORBextractor::Ptr orb_ = nullptr;
+
     };
 }
 

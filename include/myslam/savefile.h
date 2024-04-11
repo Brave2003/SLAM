@@ -14,7 +14,7 @@ namespace myslam{
 
             static void SaveTrajectoryFile(const std::string& filepath, std::vector< Frame::Ptr> poses);
             static void SaveTrajectoryFile(const std::string& filepath, std::vector< SE3> poses);
-
+            static void SaveTrajectoryFile(const std::string& filepath, std::unordered_map<unsigned long, Frame::Ptr> keyframes_map);
         private:
             SaveFile() = delete;
     };

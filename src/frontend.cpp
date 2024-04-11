@@ -19,22 +19,25 @@ namespace myslam
 
     Frontend::Frontend()
     {
-        if(Config::Get<std::string>("capture_feature_function")=="GFTT"){
-            gftt_ =
-                cv::GFTTDetector::create(Config::Get<int>("num_features"), 0.01, 20);
-        }else{
-            orb_ =cv::ORB::create();
-        }
-        num_features_init_ = Config::Get<int>("num_features_init");
-        num_features_ = Config::Get<int>("num_features");
+//        if(Config::Get<std::string>("capture_feature_function")=="GFTT"){
+//            gftt_ =
+//                cv::GFTTDetector::create(Config::Get<int>("num_features"), 0.01, 20);
+//        }else{
+//            orb_ =cv::ORB::create();
+//        }
+//        num_features_init_ = Config::Get<int>("num_features_init");
+//        num_features_ = Config::Get<int>("num_features");
+        orb_initial_ = ORBextractor::Ptr (new ORBextractor(300, 1.2, 8, 20, 7));
     }
 
     bool Frontend::AddFrame(Frame::Ptr frame)
     {
+        std::unique_lock<std::mutex> lck(map_->data_mutex_);
         current_frame_ = frame;
 
         switch (status_)
         {
+
         case FrontendStatus::INITING:
             StereoInit();
             break;
@@ -45,9 +48,13 @@ namespace myslam
         case FrontendStatus::LOST:
             Reset();
             break;
+            default:
+                LOG(INFO) << current_frame_->id_;
         }
 
+        if(current_frame_->is_keyframe_) last_keyframe_=current_frame_;
         last_frame_ = current_frame_;
+
         return true;
     }
 
@@ -92,10 +99,10 @@ namespace myslam
                           feat->position_.pt + cv::Point2f(10, 10), 0, CV_FILLED);
         }
         std::vector<cv::KeyPoint> keypoints;
-        if(Config::Get<std::string>("capture_feature_function")=="GFTT"){
-            gftt_->detect(current_frame_->left_img_, keypoints, mask);
+        if(status_== FrontendStatus::INITING){
+            orb_initial_->Detect(current_frame_->left_img_, mask, keypoints);
         }else{
-            orb_->detectAndCompute(current_frame_->left_img_, mask, keypoints, current_frame_->descriptors_);
+            orb_->Detect(current_frame_->left_img_, mask, keypoints);
         }
         int cnt_detected = 0;
         for (auto &kp : keypoints)
@@ -120,7 +127,7 @@ namespace myslam
             {
                 // use projected points as initial guess
                 auto px =
-                    camera_right_->world2pixel(mp->pos_, current_frame_->Pose());
+                    camera_right_->world2pixel(mp->pos_, current_frame_->PoseRelative()*last_keyframe_->Pose().inverse());
                 kps_right.push_back(cv::Point2f(px[0], px[1]));
             }
             else
@@ -192,7 +199,7 @@ namespace myslam
         }
         current_frame_->SetKeyFrame();
         map_->InsertKeyFrame(current_frame_);
-        backend_->UpdateMap();
+        backend_->InsertKeyFrame(current_frame_);
 
         LOG(INFO) << "Initial map created with " << cnt_init_landmarks
                   << " map points";
@@ -204,8 +211,7 @@ namespace myslam
     {
         if (last_frame_)
         {
-            current_frame_->SetPose(relative_motion_ * last_frame_->Pose());
-
+            current_frame_->SetPoseRelative(relative_motion_ * last_frame_->PoseRelative());
         }
         // 跟踪
         int num_track_last = TrackLastFrame();
@@ -230,7 +236,7 @@ namespace myslam
         }
 
         InsertKeyframe();
-        relative_motion_ = current_frame_->Pose() * last_frame_->Pose().inverse();
+        relative_motion_ = current_frame_->PoseRelative() * last_frame_->PoseRelative().inverse();
 
         if (viewer_)
             viewer_->AddCurrentFrame(current_frame_);
@@ -246,6 +252,9 @@ namespace myslam
         }
         // current frame is a new keyframe
         current_frame_->SetKeyFrame();
+        current_frame_->lastKeyFrame_ = last_keyframe_;
+        current_frame_->relativePoseToLastKF = current_frame_->Pose()*last_keyframe_->Pose().inverse();
+
         map_->InsertKeyFrame(current_frame_);
         loop_->InsertKeyFrame(current_frame_);
         LOG(INFO) << "Set frame " << current_frame_->id_ << " as keyframe "
@@ -259,8 +268,7 @@ namespace myslam
         // triangulate map points
         TriangulateNewPoints();
         // update backend because we have a new keyframe
-        backend_->UpdateMap();
-        loop_->UpdateMap();
+        backend_->InsertKeyFrame(current_frame_);
 
         if (viewer_)
             viewer_->UpdateMap();
@@ -281,7 +289,7 @@ namespace myslam
     int Frontend::TriangulateNewPoints()
     {
         std::vector<SE3> poses{camera_left_->pose(), camera_right_->pose()};
-        SE3 current_pose_Twc = current_frame_->Pose().inverse();
+        SE3 current_pose_Twc = (current_frame_->PoseRelative()*last_frame_->Pose()).inverse();
         int cnt_triangulated_pts = 0;
         for (size_t i = 0; i < current_frame_->features_left_.size(); ++i)
         {
@@ -397,6 +405,7 @@ namespace myslam
 
         LOG(INFO) << "Outlier/Inlier in pose estimating: " << cnt_outlier << "/" << features.size() - cnt_outlier;
         current_frame_->SetPose(vertex_pose->estimate());
+        current_frame_->SetPoseRelative(vertex_pose->estimate()*last_keyframe_->Pose().inverse());
 
         LOG(INFO) << "Current Pose = \n"
                   << current_frame_->Pose().matrix();

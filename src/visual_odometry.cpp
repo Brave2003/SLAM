@@ -22,6 +22,7 @@ namespace myslam
         map_ = Map::Ptr(new Map);
         viewer_ = Viewer::Ptr(new Viewer);
         loop_ = LoopClosure::Ptr(new LoopClosure);
+        orb_ = ORBextractor::Ptr(new ORBextractor(100,1.2,8,20,7));
 
 
         frontend_->SetBackend(backend_);
@@ -29,14 +30,18 @@ namespace myslam
         frontend_->SetViewer(viewer_);
         frontend_->SetCameras(dataset_->GetCamera(0), dataset_->GetCamera(1));
         frontend_->SetLoopColsure(loop_);
+        frontend_->SetORB(orb_);
 
         backend_->SetMap(map_);
         backend_->SetCameras(dataset_->GetCamera(0), dataset_->GetCamera(1));
+        backend_->SetLoop(loop_);
 
         viewer_->SetMap(map_);
 
         loop_->SetCameras(dataset_->GetCamera(0), dataset_->GetCamera(1));
         loop_->SetMap(map_);
+        loop_->SetORB(orb_);
+        loop_->SetBackend(backend_);
 
         return true;
     }
@@ -57,7 +62,7 @@ namespace myslam
         viewer_->Close();
         loop_->Stop();
         if(Config::Get<int>("is_save_trajectory"))
-            SaveFile::SaveTrajectoryFile(Config::Get<std::string>("save_dir"), loop_->GetKeyFrameDatabase()->GetALLKeyFrames());
+            SaveFile::SaveTrajectoryFile(Config::Get<std::string>("save_dir"), map_->GetAllKeyFrames());
 
         LOG(INFO) << "VO exit";
     }

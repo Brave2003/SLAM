@@ -70,6 +70,24 @@ namespace myslam
         return timeStamps; // 程序正常结束
     };
 
+    void SaveFile::SaveTrajectoryFile(const std::string& filepath, std::unordered_map<unsigned long, Frame::Ptr> keyframes_map)
+    {
+        std::vector<Sophus::SE3d> poses;
+        for(const auto& id_frame: keyframes_map){
+            poses.push_back(id_frame.second->Pose());
+        }
+
+        if (SaveFile::SE32TUM(filepath,
+                              Config::Get<std::string>("trajectory_file_name"),
+                              poses,
+                              SaveFile::ReadTimeStampsFile(Config::Get<std::string>("dataset_dir") + "/" + "times.txt")))
+        {
+            LOG(INFO) << "Save trajectory file to : " << filepath;
+        }
+        else
+            LOG(ERROR) << "Couldn't save trajectory file to: " << filepath;
+    }
+
     void SaveFile::SaveTrajectoryFile(const std::string& filepath, std::vector< Frame::Ptr> keyframes)
     {
         std::vector<Sophus::SE3d> poses;
