@@ -3,4 +3,5 @@
 /.vscode
 /.github
 /lib
-/,github
+/.github
+/.vscode
