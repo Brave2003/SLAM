@@ -17,7 +17,7 @@ class Map {
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
     typedef std::shared_ptr<Map> Ptr;
-    typedef std::unordered_map<unsigned long, MapPoint::Ptr> LandmarksType;
+    typedef std::unordered_map<unsigned long, MapPoint::Ptr> MapPointsType;
     typedef std::unordered_map<unsigned long, Frame::Ptr> KeyframesType;
 
     Map() {}
@@ -27,10 +27,32 @@ class Map {
     /// 增加一个地图顶点
     void InsertMapPoint(MapPoint::Ptr map_point);
 
+    void InsertActivateMapPoint(MapPoint::Ptr map_point);
+
+    void RemoveOldActivateMapPoints();
+
+
+
+    void AddOutlierMapPoint(unsigned long id){
+        std::unique_lock<std::mutex> lock(data_mutex_outlier_);
+        outlier_mappoints_.push_back(id);
+    }
+
+    void RemoveAllOutlierMapPoints(){
+        std::unique_lock<std::mutex> lock(data_mutex_);
+        std::unique_lock<std::mutex> lock1(data_mutex_outlier_);
+        for(auto iter = outlier_mappoints_.begin(); iter != outlier_mappoints_.end(); iter++){
+            mappoints_.erase(*iter);
+            activate_mappoints_.erase(*iter);
+        }
+        outlier_mappoints_.clear();
+    }
+
+
     /// 获取所有地图点
-    LandmarksType GetAllMapPoints() {
+    MapPointsType GetAllMapPoints() {
         std::unique_lock<std::mutex> lck(data_mutex_);
-        return landmarks_;
+        return mappoints_;
     }
     /// 获取所有关键帧
     KeyframesType GetAllKeyFrames() {
@@ -39,9 +61,9 @@ class Map {
     }
 
     /// 获取激活地图点
-    LandmarksType GetActiveMapPoints() {
+    MapPointsType GetActiveMapPoints() {
         std::unique_lock<std::mutex> lck(data_mutex_);
-        return active_landmarks_;
+        return activate_mappoints_;
     }
 
     /// 获取激活关键帧
@@ -50,33 +72,7 @@ class Map {
         return active_keyframes_;
     }
 
-    KeyframesType GetLoopKeyFrames(const int start, const int end){
-        std::unique_lock<std::mutex> lck(data_mutex_);
-        KeyframesType loopKeyFrames;
-        for(const auto& KF: keyframes_){
-            if(KF.first>=start&&KF.first<=end){
-                loopKeyFrames.insert(KF);
-            }
-        }
-        return loopKeyFrames;
-    }
 
-    LandmarksType GetLoopMapPoints(const int start, const int end){
-        KeyframesType loopKeyFrames = GetLoopKeyFrames(start, end);
-        LandmarksType loopMapPoints;
-        for(const auto& KF: loopKeyFrames){
-            Frame::Ptr frame = KF.second;
-            for(size_t i=0;i<frame->features_left_.size();i++){
-                if(frame->features_left_[i]->map_point_.expired() &&
-                        frame->features_right_[i] != nullptr){
-                    auto p = frame->features_left_[i]->map_point_.lock();
-                    loopMapPoints.insert(make_pair(p->id_, p));
-                }
-
-            }
-        }
-        return loopMapPoints;
-    }
 
     /// 清理map中观测数量为零的点
     void CleanMap();
@@ -84,21 +80,22 @@ class Map {
     void RemoveMapPoint(MapPoint::Ptr mappoint){
         std::unique_lock<std::mutex> lock(data_mutex_);
         unsigned long mappoint_id = mappoint->id_;
-        landmarks_.erase(mappoint_id);
-        active_landmarks_.erase(mappoint_id);
+        mappoints_.erase(mappoint_id);
+        activate_mappoints_.erase(mappoint_id);
     }
 
-    std::mutex data_mutex_;
+    std::mutex data_update_mutex_, data_mutex_outlier_, data_mutex_;
 
    private:
     // 将旧的关键帧置为不活跃状态
-    void RemoveOldKeyframe();
+    void RemoveOldActivateKeyframe();
 
 
-    LandmarksType landmarks_;         // all landmarks
-    LandmarksType active_landmarks_;  // active landmarks
+    MapPointsType mappoints_;         // all landmarks
+    MapPointsType activate_mappoints_;  // active landmarks
     KeyframesType keyframes_;         // all key-frames
     KeyframesType active_keyframes_;  // active key-frames
+    std::list<unsigned long> outlier_mappoints_;
 
     Frame::Ptr current_frame_ = nullptr;
 

@@ -45,4 +45,16 @@ void MapPoint::RemoveObservation(std::shared_ptr<Feature> feat) {
     }
 }
 
+    void MapPoint::RemoveActivateObservation(std::shared_ptr<Feature> feature){
+        std::unique_lock<std::mutex> lck(data_mutex_);
+        for(auto iter = activate_observations_.begin(); iter != activate_observations_.end(); iter++){
+            if(iter->lock() == feature){
+                activate_observations_.erase(iter);
+//                feature->mpMapPoint.reset();
+                activate_observed_times_--;
+                break;
+            }
+        }
+    }
+
 }  // namespace myslam

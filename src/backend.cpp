@@ -15,7 +15,7 @@ namespace myslam{
     }
 
 //    void Backend::UpdateMap(){
-//        std::unique_lock<std::mutex> lock(data_mutex_);
+//        std::unique_lock<std::mutex> lock(data_update_mutex_);
 //        map_update_.notify_one();
 //    }
 
@@ -74,13 +74,158 @@ namespace myslam{
             pause_.store(false);
 
             if(!CheckNewKeyFrames() && need_optimization_){
-                Optimize();
+                OptimizeActiveMap();
                 need_optimization_ = false;
             }
             usleep(1000);
         }
     }
 
+    void Backend::OptimizeActiveMap(){
+        // setup g2o
+        typedef g2o::BlockSolver_6_3 BlockSolverType;
+        typedef g2o::LinearSolverCSparse<BlockSolverType::PoseMatrixType> LinearSolverType;
+        auto solver = new g2o::OptimizationAlgorithmLevenberg(g2o::make_unique<BlockSolverType>(
+                g2o::make_unique<LinearSolverType>()));
+        g2o::SparseOptimizer optimizer;
+        optimizer.setAlgorithm(solver);
+
+        Map::KeyframesType activeKFs = map_->GetActiveKeyFrames();
+        Map::MapPointsType activeMPs = map_->GetActiveMapPoints();
+
+        // add keyframe vertices
+        std::unordered_map<unsigned long, VertexPose *> vertices_kfs;
+        unsigned long maxKFId = 0;
+        for(auto &keyframe: activeKFs){
+            auto kf = keyframe.second;
+            VertexPose *vertex_pose = new VertexPose();
+            vertex_pose->setId(kf->keyframe_id_);
+            vertex_pose->setEstimate(kf->Pose());
+            optimizer.addVertex(vertex_pose);
+
+            maxKFId = std::max(maxKFId, kf->keyframe_id_);
+            vertices_kfs.insert({kf->keyframe_id_, vertex_pose});
+        }
+//        LOG(INFO)<<"backend optimize";
+        Mat33 camK = cam_left_->K();
+        SE3 camExt = cam_left_->pose();
+        int index = 1; // edge index
+        double chi2_th = 5.991;
+
+        // add mappoint vertices
+        // add edges
+        std::unordered_map<unsigned long, VertexXYZ *> vertices_mps;
+        std::unordered_map<EdgeProjection *, Feature::Ptr> edgesAndFeatures;
+        for(auto &mappoint: activeMPs){
+
+            auto mp = mappoint.second;
+            if(mp->is_outlier_) {
+                continue;
+            }
+
+            unsigned long mappointId = mp->id_;
+            VertexXYZ *v = new VertexXYZ;
+            v->setEstimate(mp->Pos());
+            v->setId((maxKFId +1) + mappointId);
+            v->setMarginalized(true);
+
+            // if the KF which first observes this mappoint is not in the active map,
+            // then fixed this mappoint (be included just as constraint)
+            if(activeKFs.find(mp->GetObs().front().lock()->frame_.lock()->keyframe_id_) == activeKFs.end()){
+                v->setFixed(true);
+            }
+
+            vertices_mps.insert({mappointId, v});
+            optimizer.addVertex(v);
+
+            // edges
+            for(auto &obs: mp->GetActiveObservations()){
+                auto feat = obs.lock();
+                auto kf = feat->frame_.lock();
+
+                assert(activeKFs.find(kf->keyframe_id_) != activeKFs.end());
+
+                if(feat->is_outlier_)
+                    continue;
+
+                EdgeProjection *edge = new EdgeProjection(camK, camExt);
+                edge->setId(index);
+                edge->setVertex(0, vertices_kfs.at(kf->keyframe_id_));
+                edge->setVertex(1, vertices_mps.at(mp->id_));
+                edge->setMeasurement(toVec2(feat->position_.pt));
+                edge->setInformation(Mat22::Identity());
+                auto rk = new g2o::RobustKernelHuber();
+                rk->setDelta(chi2_th);
+                edge->setRobustKernel(rk);
+                edgesAndFeatures.insert({edge, feat});
+
+                optimizer.addEdge(edge);
+                index++;
+            }
+        }
+
+        // do optimization
+        int cntOutlier = 0, cntInlier = 0;
+        int iteration = 0;
+        LOG(INFO)<<"backend optimize";
+        while(iteration < 5){
+            optimizer.initializeOptimization();
+            optimizer.optimize(10);
+            cntOutlier = 0;
+            cntInlier = 0;
+            // determine if we want to adjust the outlier threshold
+            for(auto &ef: edgesAndFeatures){
+                if(ef.first->chi2() > chi2_th){
+                    cntOutlier++;
+                }else{
+                    cntInlier++;
+                }
+            }
+            double inlierRatio = cntInlier / double(cntInlier + cntOutlier);
+            if(inlierRatio > 0.5){
+                break;
+            }else{
+                // chi2_th *= 2;
+                iteration++;
+            }
+        }
+
+        // process the outlier edges
+        // remove the link between the feature and the mappoint
+        for(auto &ef: edgesAndFeatures){
+            if(ef.first->chi2() > chi2_th){
+                ef.second->is_outlier_ = true;
+                auto mappoint = ef.second->map_point_.lock();
+                mappoint->RemoveActivateObservation(ef.second);
+                mappoint->RemoveObservation(ef.second);
+                // if the mappoint has no good observation, then regard it as a outlier. It will be deleted later.
+                if(mappoint->GetObs().empty()){
+                    mappoint->is_outlier_ = true;
+                    map_->AddOutlierMapPoint(mappoint->id_);
+                }
+                ef.second->map_point_.reset();
+            }else{
+                ef.second->is_outlier_ = false;
+            }
+        }
+
+        { // mutex
+            std::unique_lock<std::mutex> lck(map_->data_update_mutex_);
+            // update the pose and landmark position
+            for (auto &v: vertices_kfs) {
+                activeKFs.at(v.first)->SetPose(v.second->estimate());
+            }
+            for (auto &v: vertices_mps){
+                activeMPs.at(v.first)->SetPos(v.second->estimate());
+            }
+
+//            // delete outlier mappoints
+            map_->RemoveAllOutlierMapPoints();
+            map_->RemoveOldActivateMapPoints();
+        } // mutex
+
+        // LOG(INFO) << "Backend: Outlier/Inlier in optimization: " << cntOutlier << "/" << cntInlier;
+    }
     void Backend::Optimize(){
         typedef g2o::BlockSolver_6_3 BlockSolverType;
         typedef g2o::LinearSolverCSparse<BlockSolverType::PoseMatrixType> LinearSolverType;
@@ -93,7 +238,7 @@ namespace myslam{
         optimizer.setAlgorithm(solver);
 
         Map::KeyframesType keyframes = map_->GetActiveKeyFrames();
-        Map::LandmarksType landmarks = map_->GetActiveMapPoints();
+        Map::MapPointsType landmarks = map_->GetActiveMapPoints();
 
         //vertex
         std::map<unsigned long, VertexPose *> vertices;
@@ -124,7 +269,9 @@ namespace myslam{
         for(auto &landmark : landmarks){
             if (landmark.second -> is_outlier_) continue;
             unsigned long landmark_id = landmark.second -> id_;
+            auto mp = landmark.second;
             auto observations = landmark.second -> GetObs();
+
             for(auto &obs : observations){
                 if(obs.lock() == nullptr) continue;
                 auto feat = obs.lock();
@@ -165,14 +312,17 @@ namespace myslam{
             }
         }
 
-        optimizer.initializeOptimization();
-        optimizer.optimize(10);
+
 
         // 找到一个合适的chi2_th阈值，使得内点的比例超过50%
         // 增强优化迭代的鲁棒性
         int iteration = 0;
         int cnt_outlier, cnt_inlier;
+        LOG(INFO)<<"backend optimize";
+        optimizer.initializeOptimization();
+        optimizer.optimize(10);
         while(iteration < 5){
+
             cnt_outlier = 0, cnt_inlier =0;
             for(auto &ef : edges_and_features){
                 if(ef.first -> chi2() > chi2_th){
@@ -199,10 +349,10 @@ namespace myslam{
             }
         }
 
-        LOG(INFO) << "Outlier/Inlier in optimization: " << cnt_outlier << "/" <<cnt_inlier;
+//        LOG(INFO) << "Outlier/Inlier in optimization: " << cnt_outlier << "/" <<cnt_inlier;
 
         {
-            std::unique_lock<std::mutex> lock(map_->data_mutex_);
+            std::unique_lock<std::mutex> lock(map_->data_update_mutex_);
             for(auto &c: vertices){
                 keyframes.at(c.first)->SetPose(c.second->estimate());
             }
@@ -211,4 +361,144 @@ namespace myslam{
             }
         }
     }
+
+//        void Backend::Optimize() {
+//            // setup g2o
+//            typedef g2o::BlockSolver_6_3 BlockSolverType;
+//            typedef g2o::LinearSolverCSparse<BlockSolverType::PoseMatrixType> LinearSolverType;
+//            auto solver = new g2o::OptimizationAlgorithmLevenberg(g2o::make_unique<BlockSolverType>(
+//                    g2o::make_unique<LinearSolverType>()));
+//            g2o::SparseOptimizer optimizer;
+//            optimizer.setAlgorithm(solver);
+//
+//            Map::KeyframesType activeKFs = map_->GetActiveKeyFrames();
+//            Map::MapPointsType activeMPs = map_->GetActiveMapPoints();
+//
+//            // add keyframe vertices
+//            std::unordered_map<unsigned long, VertexPose *> vertices_kfs;
+//            unsigned long maxKFId = 0;
+//            for (auto &keyframe: activeKFs) {
+//                auto kf = keyframe.second;
+//                VertexPose *vertex_pose = new VertexPose();
+//                vertex_pose->setId(kf->keyframe_id_);
+//                vertex_pose->setEstimate(kf->Pose());
+//                optimizer.addVertex(vertex_pose);
+//
+//                maxKFId = std::max(maxKFId, kf->keyframe_id_);
+//                vertices_kfs.insert({kf->keyframe_id_, vertex_pose});
+//            }
+//
+//            Mat33 camK = cam_left_->K();
+//            SE3 camExt = cam_left_->pose_;
+//            int index = 1; // edge index
+//            double chi2_th = 5.991;
+//
+//            // add mappoint vertices
+//            // add edges
+//            std::unordered_map<unsigned long, VertexXYZ *> vertices_mps;
+//            std::unordered_map<EdgeProjection *, Feature::Ptr> edgesAndFeatures;
+//            for (auto &mappoint: activeMPs) {
+//                auto mp = mappoint.second;
+//                if (mp->is_outlier_) {
+//                    continue;
+//                }
+//
+//                unsigned long mappointId = mp->id_;
+//                VertexXYZ *v = new VertexXYZ;
+//                v->setEstimate(mp->Pos());
+//                v->setId((maxKFId + 1) + mappointId);
+//                v->setMarginalized(true);
+//
+//                // if the KF which first observes this mappoint is not in the active map,
+//                // then fixed this mappoint (be included just as constraint)
+//                if (activeKFs.find(mp->GetObs().front().lock()->frame_.lock()->keyframe_id_) == activeKFs.end()) {
+//                    v->setFixed(true);
+//                }
+//
+//                vertices_mps.insert({mappointId, v});
+//                optimizer.addVertex(v);
+//
+//                // edges
+//                for (auto &obs: mp->GetObs()) {
+//                    auto feat = obs.lock();
+//                    auto kf = feat->frame_.lock();
+//
+//                    assert(activeKFs.find(kf->keyframe_id_) != activeKFs.end());
+//
+//                    if (feat->is_outlier_)
+//                        continue;
+//
+//                    EdgeProjection *edge = new EdgeProjection(camK, camExt);
+//                    edge->setId(index);
+//                    edge->setVertex(0, vertices_kfs.at(kf->keyframe_id_));
+//                    edge->setVertex(1, vertices_mps.at(mp->id_));
+//                    edge->setMeasurement(toVec2(feat->position_.pt));
+//                    edge->setInformation(Mat22::Identity());
+//                    auto rk = new g2o::RobustKernelHuber();
+//                    rk->setDelta(chi2_th);
+//                    edge->setRobustKernel(rk);
+//                    edgesAndFeatures.insert({edge, feat});
+//
+//                    optimizer.addEdge(edge);
+//                    index++;
+//                }
+//            }
+//
+//            // do optimization
+//            int cntOutlier = 0, cntInlier = 0;
+//            int iteration = 0;
+//
+//            while (iteration < 5) {
+//                optimizer.initializeOptimization();
+//                optimizer.optimize(10);
+//                cntOutlier = 0;
+//                cntInlier = 0;
+//                // determine if we want to adjust the outlier threshold
+//                for (auto &ef: edgesAndFeatures) {
+//                    if (ef.first->chi2() > chi2_th) {
+//                        cntOutlier++;
+//                    } else {
+//                        cntInlier++;
+//                    }
+//                }
+//                double inlierRatio = cntInlier / double(cntInlier + cntOutlier);
+//                if (inlierRatio > 0.5) {
+//                    break;
+//                } else {
+//                    // chi2_th *= 2;
+//                    iteration++;
+//                }
+//            }
+//
+//            // process the outlier edges
+//            // remove the link between the feature and the mappoint
+//            for (auto &ef: edgesAndFeatures) {
+//                if (ef.first->chi2() > chi2_th) {
+//                    ef.second->is_outlier_ = true;
+//                    auto mappoint = ef.second->map_point_.lock();
+//
+//                    mappoint->RemoveObservation(ef.second);
+//                    // if the mappoint has no good observation, then regard it as a outlier. It will be deleted later.
+//                    if (mappoint->GetObs().empty()) {
+//                        mappoint->is_outlier_ = true;
+//
+//                    }
+//                    ef.second->map_point_.reset();
+//                } else {
+//                    ef.second->is_outlier_ = false;
+//                }
+//            }
+//
+//            { // mutex
+//                std::unique_lock<std::mutex> lck(map_->data_update_mutex_);
+//                // update the pose and landmark position
+//                for (auto &v: vertices_kfs) {
+//                    activeKFs.at(v.first)->SetPose(v.second->estimate());
+//                }
+//                for (auto &v: vertices_mps) {
+//                    activeMPs.at(v.first)->SetPos(v.second->estimate());
+//                }
+//
+//            } // mutex
+//        }
 }

@@ -32,29 +32,33 @@ namespace myslam
 
     bool Frontend::AddFrame(Frame::Ptr frame)
     {
-        std::unique_lock<std::mutex> lck(map_->data_mutex_);
         current_frame_ = frame;
-
-        switch (status_)
         {
+            std::unique_lock<std::mutex> lck(map_->data_update_mutex_);
 
-        case FrontendStatus::INITING:
-            StereoInit();
-            break;
-        case FrontendStatus::TRACKING_GOOD:
-        case FrontendStatus::TRACKING_BAD:
-            Track();
-            break;
-        case FrontendStatus::LOST:
-            Reset();
-            break;
-            default:
-                LOG(INFO) << current_frame_->id_;
+
+
+            switch (status_) {
+
+                case FrontendStatus::INITING:
+                    StereoInit();
+                    break;
+                case FrontendStatus::TRACKING_GOOD:
+                case FrontendStatus::TRACKING_BAD:
+                    Track();
+                    break;
+                case FrontendStatus::LOST:
+                    Reset();
+                    break;
+
+            }
         }
 
-        if(current_frame_->is_keyframe_) last_keyframe_=current_frame_;
+        if (viewer_)
+        {
+            viewer_->AddCurrentFrame(current_frame_);
+        }
         last_frame_ = current_frame_;
-
         return true;
     }
 
@@ -69,7 +73,7 @@ namespace myslam
     bool Frontend::StereoInit()
     {
 
-        int num_features_left = DetectFeatures();
+        DetectFeatures();
         int num_coor_features = FindFeaturesInRight();
         if (num_coor_features < num_features_init_)
         {
@@ -80,11 +84,6 @@ namespace myslam
         if (build_map_success)
         {
             status_ = FrontendStatus::TRACKING_GOOD;
-            if (viewer_)
-            {
-                viewer_->AddCurrentFrame(current_frame_);
-                viewer_->UpdateMap();
-            }
             return true;
         }
         return false;
@@ -95,8 +94,8 @@ namespace myslam
         cv::Mat mask(current_frame_->left_img_.size(), CV_8UC1, 255);
         for (auto &feat : current_frame_->features_left_)
         {
-            cv::rectangle(mask, feat->position_.pt - cv::Point2f(10, 10),
-                          feat->position_.pt + cv::Point2f(10, 10), 0, CV_FILLED);
+            cv::rectangle(mask, feat->position_.pt - cv::Point2f(20, 20),
+                          feat->position_.pt + cv::Point2f(20, 20), 0, CV_FILLED);
         }
         std::vector<cv::KeyPoint> keypoints;
         if(status_== FrontendStatus::INITING){
@@ -123,7 +122,7 @@ namespace myslam
         {
             kps_left.push_back(kp->position_.pt);
             auto mp = kp->map_point_.lock();
-            if (mp)
+            if (mp && mp->is_outlier_== false)
             {
                 // use projected points as initial guess
                 auto px =
@@ -189,17 +188,15 @@ namespace myslam
             {
                 auto new_map_point = MapPoint::CreateNewMappoint();
                 new_map_point->SetPos(pworld);
-                new_map_point->AddObservation(current_frame_->features_left_[i]);
-                new_map_point->AddObservation(current_frame_->features_right_[i]);
+//                new_map_point->AddObservation(current_frame_->features_left_[i]);
+//                new_map_point->AddObservation(current_frame_->features_right_[i]);
                 current_frame_->features_left_[i]->map_point_ = new_map_point;
                 current_frame_->features_right_[i]->map_point_ = new_map_point;
                 cnt_init_landmarks++;
                 map_->InsertMapPoint(new_map_point);
             }
         }
-        current_frame_->SetKeyFrame();
-        map_->InsertKeyFrame(current_frame_);
-        backend_->InsertKeyFrame(current_frame_);
+        InsertKeyframe();
 
         LOG(INFO) << "Initial map created with " << cnt_init_landmarks
                   << " map points";
@@ -214,17 +211,17 @@ namespace myslam
             current_frame_->SetPoseRelative(relative_motion_ * last_frame_->PoseRelative());
         }
         // 跟踪
-        int num_track_last = TrackLastFrame();
+        TrackLastFrame();
         tracking_inliers_ = EstimateCurrentPose();
 
 
 
-        if (tracking_inliers_ > num_features_tracking_)
+        if (tracking_inliers_ > 50)
         {
             // tracking good
             status_ = FrontendStatus::TRACKING_GOOD;
         }
-        else if (tracking_inliers_ > num_features_tracking_bad_)
+        else if (tracking_inliers_ > 10)
         {
             // tracking bad
             status_ = FrontendStatus::TRACKING_BAD;
@@ -235,61 +232,62 @@ namespace myslam
             status_ = FrontendStatus::LOST;
         }
 
-        InsertKeyframe();
         relative_motion_ = current_frame_->PoseRelative() * last_frame_->PoseRelative().inverse();
 
-        if (viewer_)
-            viewer_->AddCurrentFrame(current_frame_);
+        if(status_ == FrontendStatus::TRACKING_BAD){
+            DetectFeatures();
+            FindFeaturesInRight();
+            TriangulateNewPoints();
+            InsertKeyframe();
+        }
+
         return true;
+    }
+
+    void Frontend::SetObservationsForKeyFrame() {
+        for (auto &feat : current_frame_->features_left_) {
+            auto mp = feat->map_point_.lock();
+            if (mp) mp->AddObservation(feat);
+        }
     }
 
     bool Frontend::InsertKeyframe()
     {
-        if (tracking_inliers_ >= num_features_needed_for_keyframe_)
-        {
-            // still have enough features, don't insert keyframe
-            return false;
-        }
-        // current frame is a new keyframe
+
+        Vec6 se3_zero;
+        se3_zero.setZero();
+
+
+
         current_frame_->SetKeyFrame();
-        current_frame_->lastKeyFrame_ = last_keyframe_;
-        current_frame_->relativePoseToLastKF = current_frame_->Pose()*last_keyframe_->Pose().inverse();
-
-        map_->InsertKeyFrame(current_frame_);
-        loop_->InsertKeyFrame(current_frame_);
-        LOG(INFO) << "Set frame " << current_frame_->id_ << " as keyframe "
-                  << current_frame_->keyframe_id_;
-
         SetObservationsForKeyFrame();
-        DetectFeatures(); // detect new features
+        if(status_ == FrontendStatus::INITING){
+            current_frame_->SetPose(SE3::exp(se3_zero));
+        }else {
 
-        // track in right image
-        FindFeaturesInRight();
-        // triangulate map points
-        TriangulateNewPoints();
+
+            current_frame_->SetPose(current_frame_->pose_relative_ * last_keyframe_->pose_);
+            current_frame_->lastKeyFrame_ = last_keyframe_;
+            current_frame_->relativePoseToLastKF = current_frame_->pose_relative_;
+        }
+
         // update backend because we have a new keyframe
         backend_->InsertKeyFrame(current_frame_);
 
-        if (viewer_)
-            viewer_->UpdateMap();
+        last_keyframe_ = current_frame_;
+        current_frame_->SetPoseRelative(SE3::exp(se3_zero));
 
+        LOG(INFO) << "Set frame " << current_frame_->id_ << " as keyframe "
+                  << current_frame_->keyframe_id_;
         return true;
     }
 
-    void Frontend::SetObservationsForKeyFrame()
-    {
-        for (auto &feat : current_frame_->features_left_)
-        {
-            auto mp = feat->map_point_.lock();
-            if (mp)
-                mp->AddObservation(feat);
-        }
-    }
+
 
     int Frontend::TriangulateNewPoints()
     {
         std::vector<SE3> poses{camera_left_->pose(), camera_right_->pose()};
-        SE3 current_pose_Twc = (current_frame_->PoseRelative()*last_frame_->Pose()).inverse();
+        SE3 current_pose_Twc = (current_frame_->PoseRelative()*last_keyframe_->Pose()).inverse();
         int cnt_triangulated_pts = 0;
         for (size_t i = 0; i < current_frame_->features_left_.size(); ++i)
         {
@@ -311,10 +309,10 @@ namespace myslam
                     auto new_map_point = MapPoint::CreateNewMappoint();
                     pworld = current_pose_Twc * pworld;
                     new_map_point->SetPos(pworld);
-                    new_map_point->AddObservation(
-                        current_frame_->features_left_[i]);
-                    new_map_point->AddObservation(
-                        current_frame_->features_right_[i]);
+//                    new_map_point->AddObservation(
+//                        current_frame_->features_left_[i]);
+//                    new_map_point->AddObservation(
+//                        current_frame_->features_right_[i]);
 
                     current_frame_->features_left_[i]->map_point_ = new_map_point;
                     current_frame_->features_right_[i]->map_point_ = new_map_point;
@@ -342,7 +340,7 @@ namespace myslam
         // 设置顶点
         VertexPose *vertex_pose = new VertexPose();
         vertex_pose->setId(0);
-        vertex_pose->setEstimate(current_frame_->Pose());
+        vertex_pose->setEstimate(current_frame_->PoseRelative()*last_keyframe_->Pose());
         optimizer.addVertex(vertex_pose);
 
         Mat33 K = camera_left_->K();
@@ -350,11 +348,13 @@ namespace myslam
         int index = 1;
         std::vector<EdgeProjectionPoseOnly *> edges;
         std::vector<Feature::Ptr> features;
+        edges.reserve(current_frame_->features_left_.size());
+        features.reserve(current_frame_->features_left_.size());
         for (size_t i = 0; i < current_frame_->features_left_.size(); ++i)
         {
             auto mp = current_frame_->features_left_[i]->map_point_.lock();
             // 会存在 不存在对路标点的映射的情况
-            if (mp)
+            if (mp && mp->is_outlier_ == false)
             {
                 features.push_back(current_frame_->features_left_[i]);
                 EdgeProjectionPoseOnly *edge = new EdgeProjectionPoseOnly(mp->pos_, K);
@@ -373,7 +373,7 @@ namespace myslam
         int cnt_outlier = 0;
         for (int itertation = 0; itertation < 4; ++itertation)
         {
-            vertex_pose->setEstimate(current_frame_->Pose());
+
             optimizer.initializeOptimization();
             optimizer.optimize(10);
             cnt_outlier = 0;
@@ -407,13 +407,18 @@ namespace myslam
         current_frame_->SetPose(vertex_pose->estimate());
         current_frame_->SetPoseRelative(vertex_pose->estimate()*last_keyframe_->Pose().inverse());
 
-        LOG(INFO) << "Current Pose = \n"
-                  << current_frame_->Pose().matrix();
+//        LOG(INFO) << "Current Pose = \n"
+//                  << current_frame_->Pose().matrix();
 
         for (auto &feat : features)
         {
             if (feat->is_outlier_)
             {
+                auto mp = feat->map_point_.lock();
+                if(mp && current_frame_->id_ - last_keyframe_->id_ <=2 ){
+                    mp->is_outlier_ = true;
+                    map_->AddOutlierMapPoint(mp->id_);
+                }
                 feat->map_point_.reset();
                 feat->is_outlier_ = false;
             }
@@ -432,7 +437,7 @@ namespace myslam
                 // use project point
                 auto mp = kp->map_point_.lock();
                 auto px =
-                    camera_left_->world2pixel(mp->pos_, current_frame_->Pose());
+                    camera_left_->world2pixel(mp->pos_, current_frame_->PoseRelative()*last_keyframe_->Pose());
                 kps_last.push_back(kp->position_.pt);
                 kps_current.push_back(cv::Point2f(px[0], px[1]));
             }
@@ -457,7 +462,7 @@ namespace myslam
 
         for (size_t i = 0; i < status.size(); ++i)
         {
-            if (status[i])
+            if (status[i] && !last_frame_->features_left_[i]->map_point_.expired())
             {
                 cv::KeyPoint kp(kps_current[i], 7);
                 Feature::Ptr feature(new Feature(current_frame_, kp));

@@ -5,3 +5,4 @@
 /lib
 /.github
 /.vscode
+/cmake-build-debug

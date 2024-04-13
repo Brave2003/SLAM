@@ -65,7 +65,7 @@ namespace myslam{
 
         bool ComputeCorrectPose();
 
-        void Optimize(Map::KeyframesType &keyframesType, Map::LandmarksType &landmarksType);
+        void Optimize(Map::KeyframesType &keyframesType, Map::MapPointsType &landmarksType);
 
         int OptimizeCurrentPose();
 

@@ -1,176 +1,263 @@
 #include "myslam/viewer.h"
-#include "myslam/feature.h"
-#include "myslam/frame.h"
 
-#include <pangolin/pangolin.h>
-#include <opencv2/opencv.hpp>
+#include "myslam/frame.h"
+#include "myslam/feature.h"
+#include "myslam/map.h"
+#include "myslam/mappoint.h"
 #include "myslam/config.h"
 
-#include "myslam/savefile.h"
 
 namespace myslam{
-    Viewer::Viewer() {
-        viewer_thread_ = std::thread(std::bind(&Viewer::ThreadLoop, this));
+
+// --------------------------------------------------------------
+    Viewer::Viewer(){
+
+
+        thread_ = std::thread(std::bind(&Viewer::ThreadLoop, this));
     }
 
-    void Viewer::Close() {
+
+// --------------------------------------------------------------
+
+    void Viewer::Close(){
         viewer_running_ = false;
-        viewer_thread_.join();
-
+        thread_.join();
     }
 
-    void Viewer::AddCurrentFrame(Frame::Ptr current_frame) {
-        std::unique_lock<std::mutex> lck(viewer_data_mutex_);
-        current_frame_ = current_frame;
-    }
+// --------------------------------------------------------------
+    void Viewer::ThreadLoop(){
+        std::cout << std::endl << "-------" << std::endl;
+        std::cout << "Viewer Thread Loop works ..." << std::endl;
 
-    void Viewer::UpdateMap() {
-        std::unique_lock<std::mutex> lck(viewer_data_mutex_);
-        assert(map_ != nullptr);
-        active_keyframes_ = map_->GetActiveKeyFrames();
-        if(Config::Get<int>("update_map_all")==0){
-            active_landmarks_ = map_->GetActiveMapPoints();
-        }else{
-            active_landmarks_ = map_->GetAllMapPoints();
-        }
-        map_updated_ = true;
-    }
-
-    void Viewer::ThreadLoop() {
         pangolin::CreateWindowAndBind("MySLAM", 1024, 768);
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        // 设置投影矩阵和模型视图矩阵
+        pangolin::CreatePanel("menu").SetBounds(0.0,1.0,0.0,pangolin::Attach::Pix(175));
+        pangolin::Var<bool> menuFollowCamera("menu.Follow Camera",true,true);
+        pangolin::Var<bool> menuShowPoints("menu.Show Points",true,true);
+        pangolin::Var<bool> menuShowKeyFrames("menu.Show KeyFrames",true,true);
+
+
+
         pangolin::OpenGlRenderState vis_camera(
-            pangolin::ProjectionMatrix(1024, 768, 400, 400, 512, 384, 0.1, 1000),
-            pangolin::ModelViewLookAt(0, -5, -10, 0, 0, 0, 0.0, -1.0, 0.0));
+                pangolin::ProjectionMatrix(1024, 768, 2000, 2000, 512, 389, 0.1, 1000),
+                pangolin::ModelViewLookAt(0,-500,-0.1, 0, 0, 0, 0.0, -1.0, 0.0));
 
-        // 设置了一个3D可视化窗口的初始状态，以及窗口视图的位置和大小。可以使用这个设置来渲染和交互3D场景。
+        // Add named OpenGL viewport to window and provide 3D Handler
         pangolin::View& vis_display =
-        pangolin::CreateDisplay()
-            .SetBounds(0.0, 1.0, 0.0, 1.0, -1024.0f / 768.0f)
-            .SetHandler(new pangolin::Handler3D(vis_camera));
+                pangolin::CreateDisplay()
+                        .SetBounds(0.0, 1.0, pangolin::Attach::Pix(175), 1.0, -1024.0f / 768.0f)
+                        .SetHandler(new pangolin::Handler3D(vis_camera));
 
-        const float blue[3] = {0, 0, 1};
-        const float green[3] = {0, 1, 0};
+        bool bFollow = true;
 
-        while(!pangolin::ShouldQuit() && viewer_running_) {
+        while(!pangolin::ShouldQuit() && viewer_running_){
+
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-            vis_display.Activate(vis_camera);
 
-            std::unique_lock<std::mutex> lock(viewer_data_mutex_);
-            if (current_frame_) {
-                DrawFrame(current_frame_, green);
-                FollowCurrentFrame(vis_camera);
-
+            std::unique_lock<std::mutex> lock(viewer_data_);
+            if(current_frame_){
+                if (menuFollowCamera && bFollow){
+                    FollowCurrentFrame(vis_camera);
+                }else if(!menuFollowCamera && bFollow){
+                    bFollow = false;
+                }else if(menuFollowCamera && !bFollow){
+                    FollowCurrentFrame(vis_camera);
+                    vis_camera.SetModelViewMatrix(
+                            pangolin::ModelViewLookAt(0,-500,-0.1, 0,0,0,0.0,-1.0, 0.0));
+                    bFollow = true;
+                }
                 cv::Mat img = PlotFrameImage();
-                cv::imshow("image", img);
+                cv::imshow("frame", img);
                 cv::waitKey(1);
             }
 
-            if (map_) {
-                DrawMapPoints();
+            vis_display.Activate(vis_camera);
+            if(current_frame_){
+                DrawFrame(current_frame_, green);
+            }
+            if (map_){
+                DrawKFsAndMPs(menuShowKeyFrames, menuShowPoints);
             }
 
             pangolin::FinishFrame();
-            usleep(5000);
+            usleep(1000);
         }
+
+        LOG(INFO)  << "Stop Viewer";
     }
 
-    /**
-     * @brief 从current_frame_中获取左图像的灰度版本，将其转换为BGR格式，并在每个有效特征点的位置绘制一个绿色的圆。最后，返回这个标记了特征点的图像
-     * 
-     * @return cv::Mat 
-     */
-    cv::Mat Viewer::PlotFrameImage() {
+// --------------------------------------------------------------
+    void Viewer::AddCurrentFrame(Frame::Ptr currentFrame){
+        std::unique_lock<std::mutex> lock(viewer_data_);
+        current_frame_ = currentFrame;
+    }
+
+// --------------------------------------------------------------
+
+    cv::Mat Viewer::PlotFrameImage(){
         cv::Mat img_out;
         cv::cvtColor(current_frame_->left_img_, img_out, CV_GRAY2BGR);
-        for (size_t i = 0; i < current_frame_->features_left_.size(); ++i) {
-            if (current_frame_->features_left_[i]->map_point_.lock()) {
-                auto feat = current_frame_->features_left_[i];
-                cv::circle(img_out, feat->position_.pt, 2, cv::Scalar(0, 250, 0),
-                        2);
-            }
+        for (size_t i = 0, N = current_frame_->features_left_.size(); i < N; ++i){
+            auto feat = current_frame_->features_left_[i];
+            cv::circle(img_out, feat->position_.pt, 2, cv::Scalar(0,250,0), 2);
         }
         return img_out;
     }
 
-    void Viewer::FollowCurrentFrame(pangolin::OpenGlRenderState& vis_camera) {
+
+
+// --------------------------------------------------------------
+
+// void Viewer::UpdateMap(){
+//     std::unique_lock<std::mutex> lck(_mmutexViewerData);
+//     assert(_mpMap != nullptr);
+//     _mumpActiveKeyFrames = _mpMap->GetActiveKeyFrames();
+//     _mumpActiveMapPoints = _mpMap->GetActiveMapPoints();
+//     _mumpAllKeyFrames = _mpMap->GetAllKeyFrames();
+//     _mumpAllMapPoints = _mpMap->GetAllMapPoints();
+//     _mbMapUpdated = true;
+// }
+
+
+
+// --------------------------------------------------------------
+
+    void Viewer::FollowCurrentFrame(pangolin::OpenGlRenderState& vis_camera){
         SE3 Twc = current_frame_->Pose().inverse();
         pangolin::OpenGlMatrix m(Twc.matrix());
         vis_camera.Follow(m, true);
     }
 
-    /**
-     * @brief 在3D视图中绘制当前相机视野的四边形框架，并可以通过改变颜色来突出显示这个框架
-     * 
-     * @param frame 
-     * @param color 
-     */
-    void Viewer::DrawFrame(Frame::Ptr frame, const float* color) {
-        SE3 Twc = frame->Pose().inverse();
-        const float sz = 1.0;
-        const int line_width = 2.0;
-        const float fx = 400;
-        const float fy = 400;
-        const float cx = 512;
-        const float cy = 384;
-        const float width = 1080;
-        const float height = 768;
 
-        glPushMatrix();
+// --------------------------------------------------------------
 
-        Sophus::Matrix4f m = Twc.matrix().template cast<float>();
-        glMultMatrixf((GLfloat*)m.data());
+    void Viewer::DrawFrame(Frame::Ptr frame, const float* color){
+        if(frame->is_keyframe_) {
+            SE3 Twc = frame->Pose().inverse();
+            const float sz = 1.0;
+            const int line_width = 2.0;
+            const float fx = 400;
+            const float fy = 400;
+            const float cx = 512;
+            const float cy = 384;
+            const float width = 1080;
+            const float height = 768;
 
-        if (color == nullptr) {
-            glColor3f(1, 0, 0);
-        } else
-            glColor3f(color[0], color[1], color[2]);
+            glPushMatrix();
 
-        glLineWidth(line_width);
-        glBegin(GL_LINES);
-        glVertex3f(0, 0, 0);
-        glVertex3f(sz * (0 - cx) / fx, sz * (0 - cy) / fy, sz);
-        glVertex3f(0, 0, 0);
-        glVertex3f(sz * (0 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
-        glVertex3f(0, 0, 0);
-        glVertex3f(sz * (width - 1 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
-        glVertex3f(0, 0, 0);
-        glVertex3f(sz * (width - 1 - cx) / fx, sz * (0 - cy) / fy, sz);
+            Sophus::Matrix4f m = Twc.matrix().template cast<float>();
+            glMultMatrixf((GLfloat *) m.data());
 
-        glVertex3f(sz * (width - 1 - cx) / fx, sz * (0 - cy) / fy, sz);
-        glVertex3f(sz * (width - 1 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+            if (color == nullptr) {
+                glColor3f(1, 0, 0);
+            } else
+                glColor3f(color[0], color[1], color[2]);
 
-        glVertex3f(sz * (width - 1 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
-        glVertex3f(sz * (0 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+            glLineWidth(line_width);
+            glBegin(GL_LINES);
+            glVertex3f(0, 0, 0);
+            glVertex3f(sz * (0 - cx) / fx, sz * (0 - cy) / fy, sz);
+            glVertex3f(0, 0, 0);
+            glVertex3f(sz * (0 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+            glVertex3f(0, 0, 0);
+            glVertex3f(sz * (width - 1 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+            glVertex3f(0, 0, 0);
+            glVertex3f(sz * (width - 1 - cx) / fx, sz * (0 - cy) / fy, sz);
 
-        glVertex3f(sz * (0 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
-        glVertex3f(sz * (0 - cx) / fx, sz * (0 - cy) / fy, sz);
+            glVertex3f(sz * (width - 1 - cx) / fx, sz * (0 - cy) / fy, sz);
+            glVertex3f(sz * (width - 1 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
 
-        glVertex3f(sz * (0 - cx) / fx, sz * (0 - cy) / fy, sz);
-        glVertex3f(sz * (width - 1 - cx) / fx, sz * (0 - cy) / fy, sz);
+            glVertex3f(sz * (width - 1 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+            glVertex3f(sz * (0 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
 
-        glEnd();
-        glPopMatrix();
+            glVertex3f(sz * (0 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+            glVertex3f(sz * (0 - cx) / fx, sz * (0 - cy) / fy, sz);
+
+            glVertex3f(sz * (0 - cx) / fx, sz * (0 - cy) / fy, sz);
+            glVertex3f(sz * (width - 1 - cx) / fx, sz * (0 - cy) / fy, sz);
+
+            glEnd();
+            glPopMatrix();
+        }else{
+            SE3 Twc = frame->Pose().inverse();
+            const float sz = 1.0;
+            const int line_width = 2.0;
+            const float fx = 400;
+            const float fy = 400;
+            const float cx = 512;
+            const float cy = 384;
+            const float width = 1080;
+            const float height = 768;
+
+            glPushMatrix();
+
+            Sophus::Matrix4f m = Twc.matrix().template cast<float>();
+            glMultMatrixf((GLfloat*)m.data());
+
+            if (color == nullptr) {
+                glColor3f(1, 0, 0);
+            } else
+                glColor3f(color[0], color[1], color[2]);
+
+            glLineWidth(line_width);
+            glBegin(GL_LINES);
+            glVertex3f(0, 0, 0);
+            glVertex3f(sz * (0 - cx) / fx, sz * (0 - cy) / fy, sz);
+            glVertex3f(0, 0, 0);
+            glVertex3f(sz * (0 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+            glVertex3f(0, 0, 0);
+            glVertex3f(sz * (width - 1 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+            glVertex3f(0, 0, 0);
+            glVertex3f(sz * (width - 1 - cx) / fx, sz * (0 - cy) / fy, sz);
+
+            glVertex3f(sz * (width - 1 - cx) / fx, sz * (0 - cy) / fy, sz);
+            glVertex3f(sz * (width - 1 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+
+            glVertex3f(sz * (width - 1 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+            glVertex3f(sz * (0 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+
+            glVertex3f(sz * (0 - cx) / fx, sz * (height - 1 - cy) / fy, sz);
+            glVertex3f(sz * (0 - cx) / fx, sz * (0 - cy) / fy, sz);
+
+            glVertex3f(sz * (0 - cx) / fx, sz * (0 - cy) / fy, sz);
+            glVertex3f(sz * (width - 1 - cx) / fx, sz * (0 - cy) / fy, sz);
+
+            glEnd();
+            glPopMatrix();
+        }
     }
 
-    void Viewer::DrawMapPoints() {
-        const float red[3] = {1.0, 0, 0};
-        for (auto& kf : active_keyframes_) {
-            DrawFrame(kf.second, red);
+
+
+
+// --------------------------------------------------------------
+
+    void Viewer::DrawKFsAndMPs(const bool menuShowKeyFrames, const bool menuShowPoints){
+        if (menuShowKeyFrames){
+            for (auto& kf: map_->GetAllKeyFrames()){
+                DrawFrame(kf.second, blue);
+            }
         }
 
         glPointSize(2);
         glBegin(GL_POINTS);
-        for (auto& landmark : active_landmarks_) {
-            auto pos = landmark.second->Pos();
-            glColor3f(red[0], red[1], red[2]);
-            glVertex3d(pos[0], pos[1], pos[2]);
+
+        if(menuShowPoints){
+            for (auto& mp : map_->GetAllMapPoints()) {
+                auto pos = mp.second->Pos();
+                glColor3f(red[0], red[1], red[2]);
+                glVertex3d(pos[0], pos[1], pos[2]);
+            }
         }
         glEnd();
     }
-}
+
+
+
+
+
+}  // namespace myslam

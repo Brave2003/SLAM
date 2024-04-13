@@ -22,8 +22,8 @@ struct MapPoint {
     bool is_outlier_ = false;
     Vec3 pos_ = Vec3::Zero();  // Position in world
     std::mutex data_mutex_;
-    int observed_times_ = 0;  // being observed by feature matching algo.
-    std::list<std::weak_ptr<Feature>> observations_;
+    int observed_times_ = 0, activate_observed_times_ = 0;  // being observed by feature matching algo.
+    std::list<std::weak_ptr<Feature>> observations_, activate_observations_;
 
     MapPoint() {}
 
@@ -45,7 +45,22 @@ struct MapPoint {
         observed_times_++;
     }
 
+    void AddActivateObservation(std::shared_ptr<Feature> feature){
+        std::unique_lock<std::mutex> lck(data_mutex_);
+        activate_observations_.push_back(feature);
+        activate_observed_times_++;
+    }
+
     void RemoveObservation(std::shared_ptr<Feature> feat);
+    void RemoveActivateObservation(std::shared_ptr<Feature> feat);
+
+    std::list<std::weak_ptr<Feature>> GetActiveObservations() {
+        std::unique_lock<std::mutex> lck(data_mutex_);
+        return activate_observations_;
+    }
+
+// -------------------------------------------------------------------
+
 
     std::list<std::weak_ptr<Feature>> GetObs() {
         std::unique_lock<std::mutex> lck(data_mutex_);

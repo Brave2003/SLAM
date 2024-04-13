@@ -27,33 +27,47 @@ void Map::InsertKeyFrame(Frame::Ptr frame) {
     // 贪心策略
 
     current_frame_ = frame;
-    if (keyframes_.find(frame->keyframe_id_) == keyframes_.end()) {
-        keyframes_.insert(make_pair(frame->keyframe_id_, frame));
-        active_keyframes_.insert(make_pair(frame->keyframe_id_, frame));
-    } 
-     else {
-         // std::cout<<frame->keyframe_id_;
-         keyframes_[frame->keyframe_id_] = frame;
-         active_keyframes_[frame->keyframe_id_] = frame;
+    {
+        std::unique_lock<std::mutex> lock(data_mutex_);
+        if (keyframes_.find(frame->keyframe_id_) == keyframes_.end()) {
+            keyframes_.insert(make_pair(frame->keyframe_id_, frame));
+            active_keyframes_.insert(make_pair(frame->keyframe_id_, frame));
+        }
+        else {
+            // std::cout<<frame->keyframe_id_;
+            keyframes_[frame->keyframe_id_] = frame;
+            active_keyframes_[frame->keyframe_id_] = frame;
+        }
+    }
+
+
+     for(auto& feat: frame->features_left_){
+         auto mp = feat->map_point_.lock();
+         if(mp){
+             mp->AddActivateObservation(feat);
+             InsertActivateMapPoint(mp);
+         }
      }
 
     if (active_keyframes_.size() > num_active_keyframes_) {
-        RemoveOldKeyframe();
+        RemoveOldActivateKeyframe();
+        RemoveOldActivateMapPoints();
     }
 }
 
 void Map::InsertMapPoint(MapPoint::Ptr map_point) {
-    if (landmarks_.find(map_point->id_) == landmarks_.end()) {
-        landmarks_.insert(make_pair(map_point->id_, map_point));
-        active_landmarks_.insert(make_pair(map_point->id_, map_point));
+    std::unique_lock<std::mutex> lock(data_mutex_);
+    if (mappoints_.find(map_point->id_) == mappoints_.end()) {
+        mappoints_.insert(make_pair(map_point->id_, map_point));
+//        activate_mappoints_.insert(make_pair(map_point->id_, map_point));
     } 
      else {
-         landmarks_[map_point->id_] = map_point;
-         active_landmarks_[map_point->id_] = map_point;
+        mappoints_[map_point->id_] = map_point;
+//        activate_mappoints_[map_point->id_] = map_point;
      }
 }
 
-void Map::RemoveOldKeyframe() {
+void Map::RemoveOldActivateKeyframe() {
     if (current_frame_ == nullptr) return;
     // 寻找与当前帧最近与最远的两个关键帧
     double max_dis = 0, min_dis = 9999;
@@ -82,41 +96,59 @@ void Map::RemoveOldKeyframe() {
         frame_to_remove = keyframes_.at(max_kf_id);
     }
 
-    LOG(INFO) << "remove keyframe " << frame_to_remove->keyframe_id_;
+// LOG(INFO) << "remove keyframe " << frame_to_remove->keyframe_id_;
     // remove keyframe and landmark observation
     active_keyframes_.erase(frame_to_remove->keyframe_id_);
     for (auto feat : frame_to_remove->features_left_) {
         auto mp = feat->map_point_.lock();
         if (mp) {
-            mp->RemoveObservation(feat);
+            mp->RemoveActivateObservation(feat);
         }
     }
-    for (auto feat : frame_to_remove->features_right_) {
-        // FindFeaturesInRight函数中对于没有对应上的右图特征点，选择置空
-        if (feat == nullptr) continue;
-        auto mp = feat->map_point_.lock();
-        if (mp) {
-            mp->RemoveObservation(feat);
-        }
-    }
+
 
     CleanMap();
 }
 
 void Map::CleanMap() {
     int cnt_landmark_removed = 0;
-    for (auto iter = active_landmarks_.begin();
-         iter != active_landmarks_.end();) {
+    for (auto iter = activate_mappoints_.begin();
+         iter != activate_mappoints_.end();) {
         // 没有观测到该地图点的视角
         // 只是删除活动视角下
         if (iter->second->observed_times_ == 0) {
-            iter = active_landmarks_.erase(iter);
+            iter = activate_mappoints_.erase(iter);
             cnt_landmark_removed++;
         } else {
             ++iter;
         }
     }
-    LOG(INFO) << "Removed " << cnt_landmark_removed << " active landmarks";
+//    LOG(INFO) << "Removed " << cnt_landmark_removed << " active landmarks";
 }
+
+void Map::InsertActivateMapPoint(MapPoint::Ptr map_point) {
+    std::unique_lock<std::mutex> lock(data_mutex_);
+    if(activate_mappoints_.find(map_point->id_) == activate_mappoints_.end()){
+        activate_mappoints_.insert(make_pair(map_point->id_, map_point));
+    }else{
+        activate_mappoints_[map_point->id_] = map_point;
+    }
+}
+
+    void Map::RemoveOldActivateMapPoints(){
+        // if the mappoint has no active observation, then remove it from the active mappoints
+        std::unique_lock<std::mutex> lck(data_mutex_);
+
+        int cntActiveLandmarkRemoved = 0;
+        for(auto iter = activate_mappoints_.begin(); iter != activate_mappoints_.end();){
+            if(iter->second->activate_observed_times_ == 0){
+                iter = activate_mappoints_.erase(iter);
+                cntActiveLandmarkRemoved++;
+            } else{
+                ++iter;
+            }
+        }
+        // LOG(INFO) << "Map: remove " << cntActiveLandmarkRemoved << " active landmarks";
+    }
 
 }  // namespace myslam

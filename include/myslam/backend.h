@@ -44,6 +44,8 @@ namespace myslam{
 
             void ProcessNewKeyFrame();
 
+            void OptimizeActiveMap();
+
         private:
 
             // process

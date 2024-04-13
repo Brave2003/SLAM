@@ -50,7 +50,7 @@ namespace myslam
     {
         while (1)
         {
-            LOG(INFO) << "VO is running";
+//            LOG(INFO) << "VO is running";
             if (Step() == false)
             {
                 break;
@@ -77,7 +77,7 @@ namespace myslam
         auto t2 = std::chrono::system_clock::now();
         auto time_used = std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t1);
 
-        LOG(INFO) << "VO cost time: " << time_used.count() << " seconds.";
+//        LOG(INFO) << "VO cost time: " << time_used.count() << " seconds.";
         return success;
     }
 }

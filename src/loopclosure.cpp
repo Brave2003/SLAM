@@ -62,7 +62,7 @@ namespace myslam {
         if(last_keyframe_==nullptr || frame->keyframe_id_ - last_keyframe_->keyframe_id_ >5){
             new_keyframes_.push_back(frame);
         }else{
-            frame->left_img_.release();
+//            frame->left_img_.release();
         }
     }
 
@@ -113,6 +113,9 @@ namespace myslam {
 
         // optimize all the previous KFs' poses
         PoseGraphOptimization();
+
+        back->Resume();
+
 
 
     }
@@ -184,7 +187,7 @@ namespace myslam {
 
         // correct kfs pose
         {
-            std::unique_lock<std::mutex> lock(map_->data_mutex_);
+            std::unique_lock<std::mutex> lock(map_->data_update_mutex_);
 
             auto mappoints = map_->GetAllMapPoints();
             auto active_mappoints = map_->GetActiveMapPoints();
@@ -216,7 +219,7 @@ namespace myslam {
 
     void LoopClosure::LoopLocalFusion(){
         // avoid conflict between tracking
-        std::unique_lock<std::mutex> lock(map_->data_mutex_);
+        std::unique_lock<std::mutex> lock(map_->data_update_mutex_);
 
         std::unordered_map<unsigned long, SE3> correct_active_poses;
         correct_active_poses.insert({current_keyframe_->keyframe_id_, correct_pose_});
@@ -235,9 +238,9 @@ namespace myslam {
         // correct active mps position
         for(auto &mappoint: map_->GetActiveMapPoints()){
             MapPoint::Ptr mp = mappoint.second;
-            assert(!mp->GetObs().empty());
+            assert(!mp->GetActiveObservations().empty());
 
-            auto feat = mp->GetObs().front().lock();
+            auto feat = mp->GetActiveObservations().front().lock();
             auto mp_obs_feat_keyframe = feat->frame_.lock();
             assert(correct_active_poses.find(mp_obs_feat_keyframe->keyframe_id_)!= correct_active_poses.end());
 
@@ -527,10 +530,10 @@ namespace myslam {
         orb_->ScreenAndComputeKPsParams(current_keyframe_->left_img_, mappoints, current_keyframe_->keypoints_);
         orb_->CalcDescriptors(current_keyframe_->left_img_, current_keyframe_->keypoints_, current_keyframe_->descriptors_);
 
-        if(!show_close_result_) current_keyframe_->left_img_.release();
+//        if(!show_close_result_) current_keyframe_->left_img_.release();
     }
 
-    void LoopClosure::Optimize(Map::KeyframesType &keyframes, Map::LandmarksType &landmarks) {
+    void LoopClosure::Optimize(Map::KeyframesType &keyframes, Map::MapPointsType &landmarks) {
         typedef g2o::BlockSolver_6_3 BlockSolverType;
         typedef g2o::LinearSolverCSparse<BlockSolverType::PoseMatrixType> LinearSolverType;
 
@@ -645,7 +648,7 @@ namespace myslam {
             if (ef.first->chi2() > chi2_th) {
                 ef.second->is_outlier_ = true;
                 // remove the observation
-                ef.second->map_point_.lock()->RemoveObservation(ef.second);
+                ef.second->map_point_.lock()->RemoveActivateObservation(ef.second);
             } else {
                 ef.second->is_outlier_ = false;
             }
@@ -656,7 +659,7 @@ namespace myslam {
 
         // Set pose and lanrmark position
         {
-            std::unique_lock<std::mutex> lock(map_->data_mutex_);
+            std::unique_lock<std::mutex> lock(map_->data_update_mutex_);
             for(auto &c: vertices){
                 keyframes.at(c.first)->SetPose(c.second->estimate());
             }

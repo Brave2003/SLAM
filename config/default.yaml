@@ -5,13 +5,13 @@
 dataset_dir: /home/brave/Desktop/kitti00/kitti00/dataset/sequences/00
 
 # camera intrinsics
-camera.fx: 517.3
-camera.fy: 516.5
-camera.cx: 325.1
-camera.cy: 249.7
+camera.fx: 718.856
+camera.fy: 718.856
+camera.cx: 687.1928
+camera.cy: 185.2157
 
-num_features: 150
-num_features_init: 50
+num_features: 50
+num_features_init: 100
 num_features_tracking: 50
 
 ## 参数配置
